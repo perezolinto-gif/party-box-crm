@@ -42,7 +42,10 @@ async function clienteId(telefono: string, nombre: string | null): Promise<strin
   return data.id;
 }
 
-async function guardar(opts: { waId: string; telefono: string; nombre: string | null; direccion: "entrante" | "saliente"; texto: string; ts: number }) {
+// Historial: solo se sugieren pedidos/cotizaciones de los últimos 30 días para no llenar la bandeja de casos viejos.
+const DIAS_HISTORIAL = 30;
+
+async function guardar(opts: { waId: string; telefono: string; nombre: string | null; direccion: "entrante" | "saliente"; texto: string; ts: number; historial?: boolean }) {
   const tel = normalizarTelefono(opts.telefono);
   if (!tel) return;
   const cid = await clienteId(tel, opts.nombre);
@@ -52,15 +55,49 @@ async function guardar(opts: { waId: string; telefono: string; nombre: string | 
   }).select("id").single();
   if (error) return; // duplicado (Meta reintenta)
   if (opts.direccion !== "entrante") return;
+  if (opts.historial && Date.now() - opts.ts * 1000 > DIAS_HISTORIAL * 86400000) return;
   const ex = extraer(opts.texto, await productos(), new Date(opts.ts * 1000));
   if (ex.tipo && ex.confianza >= UMBRAL_DETECCION) {
     await sb.from("detecciones").insert({ mensaje_id: msg.id, cliente_id: cid, tipo_sugerido: ex.tipo, confianza: ex.confianza, datos: ex });
   }
 }
 
+// ---------- YCloud (proveedor oficial de Meta, coexistencia con la app WhatsApp Business) ----------
+function igualSeguro(a: string, b: string) {
+  if (a.length !== b.length) return false;
+  let r = 0;
+  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return r === 0;
+}
+async function firmaYCloudValida(header: string, body: string, secret: string) {
+  const campos = header.split(",").map((p) => p.trim().split("="));
+  const t = campos.find(([k]) => k === "t")?.[1];
+  const firmas = campos.filter(([k]) => k === "s").map(([, v]) => (v ?? "").toLowerCase());
+  if (!t || !/^\d+$/.test(t) || !firmas.length) return false;
+  if (Math.abs(Date.now() / 1000 - Number(t)) > 300) return false;
+  const esperadas = [await hmacHex(secret, `${t}.${body}`), await hmacHex(secret, `${t}.${body}.`)];
+  return firmas.some((f) => esperadas.some((e) => igualSeguro(e, f)));
+}
+const segundos = (iso?: string) => { const n = iso ? Date.parse(iso) : NaN; return Math.floor((isNaN(n) ? Date.now() : n) / 1000); };
+
+async function procesarYCloud(ev: any) {
+  const tipo: string = ev.type ?? "";
+  const historial = tipo === "whatsapp.smb.history";
+  const ent = ev.whatsappInboundMessage;
+  const sal = ev.whatsappMessage;
+  if (ent && (tipo === "whatsapp.inbound_message.received" || historial)) {
+    const t = textoDe(ent);
+    if (t && ent.from) await guardar({ waId: ent.wamid || ent.id, telefono: ent.from, nombre: ent.customerProfile?.name ?? null, direccion: "entrante", texto: t, ts: segundos(ent.sendTime), historial });
+  }
+  if (sal && (tipo === "whatsapp.smb.message.echoes" || tipo === "whatsapp.smb.message.created" || historial)) {
+    const t = textoDe(sal);
+    if (t && sal.to) await guardar({ waId: sal.wamid || sal.id, telefono: sal.to, nombre: null, direccion: "saliente", texto: t, ts: segundos(sal.sendTime || sal.createTime), historial });
+  }
+}
+
 Deno.serve(async (req) => {
   const url = new URL(req.url);
-  const { data: cfg } = await sb.from("config_whatsapp").select("verify_token,app_secret").eq("id", 1).single();
+  const { data: cfg } = await sb.from("config_whatsapp").select("verify_token,app_secret,ycloud_secret").eq("id", 1).single();
 
   if (req.method === "GET") {
     const ok = url.searchParams.get("hub.mode") === "subscribe" && url.searchParams.get("hub.verify_token") === cfg?.verify_token;
@@ -69,6 +106,18 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("ok");
 
   const body = await req.text();
+
+  const firmaYC = req.headers.get("ycloud-signature");
+  if (firmaYC) {
+    if (!cfg?.ycloud_secret || !(await firmaYCloudValida(firmaYC, body, cfg.ycloud_secret))) return new Response("bad signature", { status: 401 });
+    let ev: any;
+    try { ev = JSON.parse(body); } catch { return new Response("bad json", { status: 400 }); }
+    try {
+      await procesarYCloud(ev);
+      await sb.from("config_whatsapp").update({ ultimo_evento: new Date().toISOString() }).eq("id", 1);
+    } catch (e) { console.error("ycloud error", e); }
+    return new Response("ok");
+  }
   if (cfg?.app_secret) {
     const firma = req.headers.get("x-hub-signature-256") ?? "";
     const esperado = "sha256=" + (await hmacHex(cfg.app_secret, body));
@@ -100,7 +149,7 @@ Deno.serve(async (req) => {
           for (const h of v.history ?? []) for (const th of h.threads ?? []) for (const m of th.messages ?? []) {
             const t = textoDe(m); if (!t) continue;
             const desdeNegocio = negocio && normalizarTelefono(m.from) === negocio;
-            await guardar({ waId: m.id, telefono: th.id, nombre: null, direccion: desdeNegocio ? "saliente" : "entrante", texto: t, ts: +m.timestamp });
+            await guardar({ waId: m.id, telefono: th.id, nombre: null, direccion: desdeNegocio ? "saliente" : "entrante", texto: t, ts: +m.timestamp, historial: true });
           }
         } else if (ch.field === "smb_app_state_sync") {
           for (const s of v.state_sync ?? []) {

@@ -175,6 +175,8 @@ export function Equipo() {
 }
 
 // ---------------- Conexión WhatsApp ----------------
+const EVENTOS_YCLOUD = ["whatsapp.inbound_message.received", "whatsapp.smb.message.echoes", "whatsapp.smb.history"];
+
 export function WhatsappConfig() {
   const { toast } = useToast();
   const cfg = useQuery({
@@ -182,12 +184,14 @@ export function WhatsappConfig() {
     queryFn: async () => {
       const { data } = await supabase.from("config_whatsapp").select("verify_token,numero_mostrado,ultimo_evento").eq("id", 1).single();
       const { data: sec } = await supabase.rpc("whatsapp_secret_configurado");
+      const { data: yc } = await supabase.rpc("ycloud_secret_configurado");
       const { count } = await supabase.from("mensajes").select("id", { count: "exact", head: true }).eq("origen", "api");
-      return { ...(data as any), secreto: !!sec, mensajesApi: count ?? 0 };
+      return { ...(data as any), secreto: !!sec, ycloud: !!yc, mensajesApi: count ?? 0 };
     },
     refetchInterval: 20000,
   });
   const [secreto, setSecreto] = useState("");
+  const [ycSecreto, setYcSecreto] = useState("");
   const [numero, setNumero] = useState("");
   useEffect(() => { if (cfg.data?.numero_mostrado) setNumero(cfg.data.numero_mostrado); }, [cfg.data?.numero_mostrado]);
 
@@ -195,7 +199,7 @@ export function WhatsappConfig() {
   async function guardar(patch: Record<string, unknown>) {
     const { error } = await supabase.from("config_whatsapp").update(patch).eq("id", 1);
     if (error) return toast({ title: "Error", description: error.message, variant: "destructive" });
-    setSecreto(""); cfg.refetch(); toast({ title: "Guardado" });
+    setSecreto(""); setYcSecreto(""); cfg.refetch(); toast({ title: "Guardado" });
   }
   const conectado = !!cfg.data?.ultimo_evento;
 
@@ -206,40 +210,61 @@ export function WhatsappConfig() {
         {conectado ? <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" /> : <CircleDashed className="h-5 w-5 text-muted-foreground shrink-0" />}
         <div className="text-sm">
           <p className="font-medium" data-testid="text-estado-conexion">{conectado ? "Recibiendo mensajes" : "Aún sin conexión"}</p>
-          <p className="text-muted-foreground">{conectado ? `Último evento: ${fechaHora(cfg.data!.ultimo_evento)} · ${cfg.data!.mensajesApi} mensajes recibidos` : "Cuando Meta envíe el primer mensaje, aquí verás la confirmación."}</p>
+          <p className="text-muted-foreground">{conectado ? `Último evento: ${fechaHora(cfg.data!.ultimo_evento)} · ${cfg.data!.mensajesApi} mensajes recibidos` : "Cuando llegue el primer mensaje, aquí verás la confirmación."}</p>
         </div>
       </section>
 
-      <section className="mb-5 rounded-xl border bg-card p-4 sm:p-5 space-y-4">
-        <h2 className="text-sm font-semibold">Datos para el proveedor o la app de Meta</h2>
-        <Dato label="URL del webhook (Callback URL)" valor={WEBHOOK_URL} onCopy={copiar} testid="webhook-url" />
-        <Dato label="Token de verificación (Verify token)" valor={cfg.data?.verify_token ?? "…"} onCopy={copiar} testid="verify-token" />
+      <section className="mb-5 rounded-xl border bg-card p-4 sm:p-5 text-sm space-y-4">
+        <div>
+          <h2 className="font-semibold">Conectar con YCloud (recomendado)</h2>
+          <p className="text-muted-foreground">Proveedor oficial de Meta. Plan gratis, sin recargo por mensaje. Los mensajes que el equipo responde desde la app no tienen costo.</p>
+        </div>
+        <ol className="list-decimal space-y-2 pl-5 text-muted-foreground">
+          <li>En el teléfono de Party Box, actualiza WhatsApp Business (versión 2.24.17 o superior).</li>
+          <li>Crea una cuenta gratis en <a className="text-primary underline" href="https://www.ycloud.com/" target="_blank" rel="noreferrer">ycloud.com</a>.</li>
+          <li>En YCloud: <b>WhatsApp accounts › Create channel › WhatsApp Business APP Coexistence</b>. Inicia sesión con Facebook, elige o crea el portafolio de Party Box, escribe el número y escanea el código QR con la app. Acepta compartir el historial de chats.</li>
+          <li>En YCloud: <b>Developers › Webhooks › Add endpoint</b>. Pega la URL de abajo y agrega los eventos indicados.</li>
+          <li>Copia la clave de firma (<i>Signing secret</i>) que muestra YCloud y pégala abajo en «Clave de firma de YCloud».</li>
+          <li>Pide a alguien que escriba al número: el contacto debe aparecer en Clientes y, si parece venta, en la Bandeja.</li>
+        </ol>
+        <Dato label="URL del webhook (Endpoint URL)" valor={WEBHOOK_URL} onCopy={copiar} testid="webhook-url" />
         <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">Campos a suscribir en Meta</Label>
-          <p className="text-sm font-mono break-words">messages, smb_message_echoes, history, smb_app_state_sync</p>
+          <Label className="text-xs text-muted-foreground">Eventos a agregar en YCloud</Label>
+          <div className="flex flex-wrap gap-2">
+            {EVENTOS_YCLOUD.map((e) => (
+              <button key={e} type="button" onClick={() => copiar(e)} className="rounded-md border bg-muted px-2 py-1 font-mono text-xs hover:bg-accent" data-testid={`button-evento-${e}`}>{e}</button>
+            ))}
+          </div>
         </div>
         <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-          <div className="space-y-1.5"><Label className="text-xs text-muted-foreground">Clave secreta de la app de Meta (opcional, valida la firma) {cfg.data?.secreto ? "· configurada" : ""}</Label>
-            <Input type="password" autoComplete="off" placeholder={cfg.data?.secreto ? "•••••••• (dejar vacío para no cambiar)" : "App Secret"} value={secreto} onChange={(e) => setSecreto(e.target.value)} data-testid="input-app-secret" /></div>
-          <Button variant="outline" disabled={!secreto} onClick={() => guardar({ app_secret: secreto })}>Guardar clave</Button>
+          <div className="space-y-1.5"><Label className="text-xs text-muted-foreground">Clave de firma de YCloud {cfg.data?.ycloud ? "· configurada" : "· obligatoria"}</Label>
+            <Input type="password" autoComplete="off" placeholder={cfg.data?.ycloud ? "•••••••• (dejar vacío para no cambiar)" : "Signing secret"} value={ycSecreto} onChange={(e) => setYcSecreto(e.target.value)} data-testid="input-ycloud-secret" /></div>
+          <Button disabled={!ycSecreto.trim()} onClick={() => guardar({ ycloud_secret: ycSecreto.trim() })} data-testid="button-guardar-ycloud">Guardar clave</Button>
         </div>
+        <p className="text-xs text-muted-foreground">Una vez guardada, nadie puede volver a verla desde el CRM. Sin ella, el CRM rechaza los mensajes para evitar datos falsos.</p>
         <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
           <div className="space-y-1.5"><Label className="text-xs text-muted-foreground">Número de Party Box (referencia)</Label><Input placeholder="505 8888 8888" value={numero} onChange={(e) => setNumero(e.target.value)} /></div>
           <Button variant="outline" onClick={() => guardar({ numero_mostrado: numero })}>Guardar</Button>
         </div>
       </section>
 
-      <section className="rounded-xl border bg-card p-4 sm:p-5 text-sm space-y-3">
-        <h2 className="font-semibold">Cómo conectar el número sin dejar de usar la app (coexistencia)</h2>
-        <ol className="list-decimal space-y-2 pl-5 text-muted-foreground">
-          <li>En el teléfono de Party Box: actualizar WhatsApp Business (versión 2.24.17 o superior) y desactivar temporalmente la verificación en dos pasos.</li>
-          <li>Iniciar el registro de WhatsApp con coexistencia a través de un proveedor oficial de Meta (por ejemplo 360dialog o YCloud), o con una app de Meta propia aprobada como Tech Provider.</li>
-          <li>Ingresar el número actual, escanear el código QR desde la app WhatsApp Business y aceptar compartir el historial de chats (hasta 6 meses).</li>
-          <li>En el proveedor o en la app de Meta, pegar la URL del webhook y el token de verificación de arriba, y suscribir los campos indicados.</li>
-          <li>Enviar un mensaje de prueba al número: debe aparecer en Clientes y, si parece venta, en la Bandeja.</li>
-        </ol>
-        <p className="text-xs text-muted-foreground">Mientras tanto, el equipo puede usar «Importar chats» para traer conversaciones exportadas desde la app.</p>
-      </section>
+      <details className="mb-5 rounded-xl border bg-card p-4 sm:p-5 text-sm">
+        <summary className="cursor-pointer font-semibold">Otra opción: app de Meta propia o 360dialog</summary>
+        <div className="mt-4 space-y-4">
+          <Dato label="URL del webhook (Callback URL)" valor={WEBHOOK_URL} onCopy={copiar} testid="webhook-url-meta" />
+          <Dato label="Token de verificación (Verify token)" valor={cfg.data?.verify_token ?? "…"} onCopy={copiar} testid="verify-token" />
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Campos a suscribir en Meta</Label>
+            <p className="text-sm font-mono break-words">messages, smb_message_echoes, history, smb_app_state_sync</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+            <div className="space-y-1.5"><Label className="text-xs text-muted-foreground">Clave secreta de la app de Meta (opcional) {cfg.data?.secreto ? "· configurada" : ""}</Label>
+              <Input type="password" autoComplete="off" placeholder={cfg.data?.secreto ? "•••••••• (dejar vacío para no cambiar)" : "App Secret"} value={secreto} onChange={(e) => setSecreto(e.target.value)} data-testid="input-app-secret" /></div>
+            <Button variant="outline" disabled={!secreto} onClick={() => guardar({ app_secret: secreto })}>Guardar clave</Button>
+          </div>
+        </div>
+      </details>
+      <p className="text-xs text-muted-foreground">Mientras tanto, el equipo puede usar «Importar chats» para traer conversaciones exportadas desde la app.</p>
     </div>
   );
 }
