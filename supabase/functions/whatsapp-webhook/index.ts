@@ -75,7 +75,9 @@ async function firmaYCloudValida(header: string, body: string, secret: string) {
   const firmas = campos.filter(([k]) => k === "s").map(([, v]) => (v ?? "").toLowerCase());
   if (!t || !/^\d+$/.test(t) || !firmas.length) return false;
   if (Math.abs(Date.now() / 1000 - Number(t)) > 300) return false;
-  const esperadas = [await hmacHex(secret, `${t}.${body}`), await hmacHex(secret, `${t}.${body}.`)];
+  const claves = secret.startsWith("whsec_") ? [secret, secret.slice(6)] : [secret];
+  const esperadas: string[] = [];
+  for (const k of claves) esperadas.push(await hmacHex(k, `${t}.${body}`), await hmacHex(k, `${t}.${body}.`));
   return firmas.some((f) => esperadas.some((e) => igualSeguro(e, f)));
 }
 const segundos = (iso?: string) => { const n = iso ? Date.parse(iso) : NaN; return Math.floor((isNaN(n) ? Date.now() : n) / 1000); };
