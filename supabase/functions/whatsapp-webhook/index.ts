@@ -14,7 +14,11 @@ function textoDe(m: any): string | null {
   if (m.type === "text" || m.text?.body) return m.text?.body ?? null;
   if (m.type === "button") return m.button?.text ?? null;
   if (m.type === "interactive") return m.interactive?.button_reply?.title ?? m.interactive?.list_reply?.title ?? null;
-  if (m.type === "image" || m.type === "video" || m.type === "document") return m[m.type]?.caption ? `[${m.type}] ${m[m.type].caption}` : `[${m.type}]`;
+  if (m.type === "image" || m.type === "video" || m.type === "document") {
+    const o = m[m.type] ?? {};
+    const pie = o.caption || (m.type === "document" ? o.filename : "") || "";
+    return pie ? `[${m.type}] ${pie}` : `[${m.type}]`;
+  }
   if (m.type === "audio") return "[audio]";
   if (m.type === "sticker") return "[sticker]";
   if (m.type === "location") return `[ubicación] ${m.location?.name ?? ""} ${m.location?.address ?? ""} (${m.location?.latitude},${m.location?.longitude})`.trim();
@@ -43,37 +47,58 @@ async function clienteId(telefono: string, nombre: string | null): Promise<strin
   return data.id;
 }
 
-// ---------- Fotos ----------
+// ---------- Fotos, videos, documentos y notas de voz ----------
 // YCloud entrega un enlace firmado que se puede abrir sin clave durante unos minutos;
-// por eso la foto se descarga en el momento y se guarda en Storage (privado).
-const EXT: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif" };
-function mediaDe(m: any): { link: string; mime: string } | null {
+// por eso el archivo se descarga en el momento y se guarda en Storage (privado).
+type Media = { link: string; mime: string; tipo: "imagen" | "video" | "documento" | "audio"; nombre: string | null };
+const MAX_BYTES = 50 * 1024 * 1024;
+const TIPOS: Record<string, Media["tipo"]> = { image: "imagen", sticker: "imagen", video: "video", document: "documento", audio: "audio" };
+const EXT: Record<string, string> = {
+  "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif",
+  "video/mp4": "mp4", "video/3gpp": "3gp", "video/quicktime": "mov",
+  "audio/ogg": "ogg", "audio/mpeg": "mp3", "audio/mp4": "m4a", "audio/aac": "aac", "audio/amr": "amr",
+  "application/pdf": "pdf", "application/msword": "doc", "application/vnd.ms-excel": "xls", "application/vnd.ms-powerpoint": "ppt",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+  "text/plain": "txt", "text/csv": "csv", "application/zip": "zip",
+};
+// Tipos que el navegador podría ejecutar: se guardan como descarga genérica.
+const PELIGROSOS = /^(text\/html|application\/xhtml|image\/svg|text\/javascript|application\/javascript|application\/x-sh)/;
+function mediaDe(m: any): Media | null {
   if (!m) return null;
-  const o = m.type === "image" ? m.image : m.type === "sticker" ? m.sticker : null;
-  const link = o?.link ?? m.image_url ?? null;
-  if (!link) return null;
-  return { link, mime: (o?.mime_type ?? "image/jpeg").split(";")[0].trim() };
+  const tipo = TIPOS[m.type];
+  const o = tipo ? m[m.type] : null;
+  const link = o?.link ?? (m.type === "image" ? m.image_url : null) ?? null;
+  if (!tipo || !link) return null;
+  return { link, mime: (o?.mime_type ?? "").split(";")[0].trim().toLowerCase(), tipo, nombre: o?.filename ?? null };
 }
-async function guardarFoto(media: { link: string; mime: string }, telefono: string, waId: string): Promise<string | null> {
+function limpiarNombre(n: string) { return n.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9._-]+/g, "_").replace(/_+/g, "_").slice(-80); }
+async function guardarMedia(media: Media, telefono: string, waId: string): Promise<{ ruta: string; mime: string; bytes: number } | null> {
   try {
     let r = await fetch(media.link);
     const clave = Deno.env.get("YCLOUD_API_KEY");
     if (!r.ok && clave) r = await fetch(media.link, { headers: { "X-API-Key": clave } });
-    if (!r.ok) { console.error("foto no descargada", r.status); return null; }
-    const mime = (r.headers.get("content-type") ?? media.mime).split(";")[0].trim();
-    const ext = EXT[mime] ?? EXT[media.mime];
-    if (!ext) return null;
-    const ruta = `${telefono}/${waId.replace(/[^A-Za-z0-9_-]/g, "").slice(-60) || crypto.randomUUID()}.${ext}`;
-    const { error } = await sb.storage.from("whatsapp-media").upload(ruta, new Uint8Array(await r.arrayBuffer()), { contentType: mime, upsert: true });
-    if (error) { console.error("foto no guardada", error.message); return null; }
-    return ruta;
-  } catch (e) { console.error("foto error", e); return null; }
+    if (!r.ok) { console.error("archivo no descargado", r.status); return null; }
+    const largo = Number(r.headers.get("content-length") ?? 0);
+    if (largo > MAX_BYTES) { console.error("archivo muy grande", largo); return null; }
+    let mime = (media.mime || r.headers.get("content-type") || "application/octet-stream").split(";")[0].trim().toLowerCase();
+    const datos = new Uint8Array(await r.arrayBuffer());
+    if (datos.byteLength > MAX_BYTES) return null;
+    if (PELIGROSOS.test(mime)) mime = "application/octet-stream";
+    const base = waId.replace(/[^A-Za-z0-9_-]/g, "").slice(-60) || crypto.randomUUID();
+    const ext = EXT[mime] ?? (media.nombre?.match(/\.([A-Za-z0-9]{1,5})$/)?.[1]?.toLowerCase()) ?? "bin";
+    const ruta = `${telefono}/${base}${media.nombre ? "-" + limpiarNombre(media.nombre.replace(/\.[^.]+$/, "")) : ""}.${ext}`;
+    const { error } = await sb.storage.from("whatsapp-media").upload(ruta, datos, { contentType: mime, upsert: true });
+    if (error) { console.error("archivo no guardado", error.message); return null; }
+    return { ruta, mime, bytes: datos.byteLength };
+  } catch (e) { console.error("archivo error", e); return null; }
 }
 
 // Historial: solo se sugieren pedidos/cotizaciones de los últimos 30 días para no llenar la bandeja de casos viejos.
 const DIAS_HISTORIAL = 30;
 
-async function guardar(opts: { waId: string; telefono: string; nombre: string | null; direccion: "entrante" | "saliente"; texto: string; ts: number; historial?: boolean; media?: { link: string; mime: string } | null }) {
+async function guardar(opts: { waId: string; telefono: string; nombre: string | null; direccion: "entrante" | "saliente"; texto: string; ts: number; historial?: boolean; media?: Media | null }) {
   const tel = normalizarTelefono(opts.telefono);
   if (!tel) return;
   const cid = await clienteId(tel, opts.nombre);
@@ -83,8 +108,8 @@ async function guardar(opts: { waId: string; telefono: string; nombre: string | 
   }).select("id").single();
   if (error) return; // duplicado (Meta reintenta)
   if (opts.media) {
-    const ruta = await guardarFoto(opts.media, tel, opts.waId);
-    if (ruta) await sb.from("mensajes").update({ media_path: ruta, media_tipo: "imagen" }).eq("id", msg.id);
+    const g = await guardarMedia(opts.media, tel, opts.waId);
+    if (g) await sb.from("mensajes").update({ media_path: g.ruta, media_tipo: opts.media.tipo, media_nombre: opts.media.nombre, media_mime: g.mime, media_bytes: g.bytes }).eq("id", msg.id);
   }
   if (opts.direccion !== "entrante") return;
   if (opts.historial && Date.now() - opts.ts * 1000 > DIAS_HISTORIAL * 86400000) return;

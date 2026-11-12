@@ -6,7 +6,7 @@ import { waLink } from "@/lib/crm";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Search, MessageCircle, UserRound, ExternalLink, Check, Camera, ImageOff } from "lucide-react";
+import { ArrowLeft, Search, MessageCircle, UserRound, ExternalLink, Check, Camera, ImageOff, Video, FileText, Mic, Download } from "lucide-react";
 
 type Msg = {
   id: string;
@@ -17,6 +17,10 @@ type Msg = {
   texto: string;
   enviado_en: string;
   media_path?: string | null;
+  media_tipo?: string | null;
+  media_nombre?: string | null;
+  media_mime?: string | null;
+  media_bytes?: number | null;
   clientes?: { id: string; nombre: string } | null;
 };
 
@@ -51,16 +55,29 @@ function etiquetaDia(iso: string) {
   const t = d.toLocaleDateString("es-NI", { weekday: "long", day: "numeric", month: "long" });
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
-/** Separa el marcador "[image]" que guarda el sistema del pie de foto. */
-function partes(texto: string | null) {
+type Clase = "foto" | "video" | "documento" | "audio" | null;
+const MARCAS: Record<string, Exclude<Clase, null>> = { image: "foto", sticker: "foto", video: "video", document: "documento", audio: "audio" };
+const ETIQUETA: Record<Exclude<Clase, null>, string> = { foto: "Foto", video: "Video", documento: "Documento", audio: "Nota de voz" };
+/** Separa el marcador que guarda el sistema ("[image]", "[video]"…) del texto que lo acompaña. */
+function partes(texto: string | null): { clase: Clase; texto: string } {
   const t = texto ?? "";
-  const m = t.match(/^\[(image|sticker)\]\s*/);
-  return m ? { foto: true, texto: t.slice(m[0].length) } : { foto: false, texto: t };
+  const m = t.match(/^\[(image|sticker|video|document|audio)\]\s*/);
+  return m ? { clase: MARCAS[m[1]], texto: t.slice(m[0].length) } : { clase: null, texto: t };
 }
+const ICONO = { foto: Camera, video: Video, documento: FileText, audio: Mic };
 function Vista({ texto }: { texto: string | null }) {
   const p = partes(texto);
-  if (!p.foto) return <span className="truncate">{p.texto || "(sin texto)"}</span>;
-  return <><Camera className="h-3.5 w-3.5 shrink-0" aria-hidden /><span className="truncate">{p.texto || "Foto"}</span></>;
+  if (!p.clase) return <span className="truncate">{p.texto || "(sin texto)"}</span>;
+  const I = ICONO[p.clase];
+  return <><I className="h-3.5 w-3.5 shrink-0" aria-hidden /><span className="truncate">{p.texto || ETIQUETA[p.clase]}</span></>;
+}
+function tamano(b?: number | null) {
+  if (!b) return "";
+  return b < 1024 * 1024 ? `${Math.max(1, Math.round(b / 1024))} KB` : `${(b / 1024 / 1024).toFixed(1)} MB`;
+}
+function extension(nombre?: string | null, mime?: string | null) {
+  const e = nombre?.match(/\.([A-Za-z0-9]{1,5})$/)?.[1] ?? mime?.split("/")[1]?.split(/[.+-]/).pop() ?? "";
+  return e.slice(0, 4).toUpperCase();
 }
 function telBonito(t: string) { return t.startsWith("+") ? t : `+${t}`; }
 
@@ -114,7 +131,7 @@ function useConversacion(telefono: string | null) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("mensajes")
-        .select("id, cliente_id, telefono, nombre_contacto, direccion, texto, enviado_en, media_path")
+        .select("id, cliente_id, telefono, nombre_contacto, direccion, texto, enviado_en, media_path, media_tipo, media_nombre, media_mime, media_bytes")
         .eq("telefono", telefono!)
         .order("enviado_en", { ascending: false })
         .limit(1000);
@@ -302,20 +319,46 @@ function Conversacion({ telefono, chat, onVolver }: { telefono: string; chat: Ch
 
 function Contenido({ m, url, onCargar }: { m: Msg; url?: string; onCargar?: () => void }) {
   const p = partes(m.texto);
-  if (!p.foto) return <p className="whitespace-pre-wrap break-words">{m.texto}</p>;
+  if (!p.clase) return <p className="whitespace-pre-wrap break-words">{m.texto}</p>;
+  const pie = p.clase === "documento" && p.texto === m.media_nombre ? "" : p.texto;
+  let cuerpo: React.ReactNode;
+  if (!url) {
+    cuerpo = (
+      <div className="flex w-[240px] max-w-full items-center gap-2 rounded-lg bg-muted/70 px-3 py-3 text-sm text-muted-foreground">
+        <ImageOff className="h-4 w-4 shrink-0" aria-hidden />
+        <span>{m.media_path ? "Cargando…" : `${ETIQUETA[p.clase]} (llegó antes de activar los archivos)`}</span>
+      </div>
+    );
+  } else if (p.clase === "foto") {
+    cuerpo = (
+      <a href={url} target="_blank" rel="noreferrer" className="block" data-testid={`foto-${m.id}`}>
+        <img src={url} alt={p.texto || "Foto enviada por WhatsApp"} onLoad={onCargar} className="max-h-80 w-full max-w-[280px] rounded-lg bg-muted object-cover" />
+      </a>
+    );
+  } else if (p.clase === "video") {
+    cuerpo = (
+      <video src={url} controls playsInline preload="metadata" onLoadedMetadata={onCargar} className="max-h-80 w-[280px] max-w-full rounded-lg bg-black" data-testid={`video-${m.id}`} />
+    );
+  } else if (p.clase === "audio") {
+    cuerpo = <audio src={url} controls preload="metadata" className="w-[260px] max-w-full" data-testid={`audio-${m.id}`} />;
+  } else {
+    const nombre = m.media_nombre || "Documento";
+    const descarga = `${url}${url.includes("?") ? "&" : "?"}download=${encodeURIComponent(nombre)}`;
+    cuerpo = (
+      <div className="flex w-[280px] max-w-full items-center gap-3 rounded-lg bg-black/[.04] p-2.5" data-testid={`doc-${m.id}`}>
+        <span className="grid h-11 w-10 shrink-0 place-items-center rounded-md bg-[hsl(var(--solido-rojo))] text-[10px] font-bold text-white">{extension(m.media_nombre, m.media_mime) || <FileText className="h-4 w-4" />}</span>
+        <div className="min-w-0 flex-1">
+          <a href={url} target="_blank" rel="noreferrer" className="block truncate text-sm font-semibold hover:underline">{nombre}</a>
+          <p className="text-xs text-muted-foreground">{[extension(m.media_nombre, m.media_mime), tamano(m.media_bytes)].filter(Boolean).join(" · ")}</p>
+        </div>
+        <a href={descarga} className="grid h-8 w-8 shrink-0 place-items-center rounded-full hover:bg-black/5" aria-label={`Descargar ${nombre}`}><Download className="h-4 w-4" /></a>
+      </div>
+    );
+  }
   return (
     <div className="-mx-1 -mt-0.5">
-      {url ? (
-        <a href={url} target="_blank" rel="noreferrer" className="block" data-testid={`foto-${m.id}`}>
-          <img src={url} alt={p.texto || "Foto enviada por WhatsApp"} onLoad={onCargar} className="max-h-80 w-full max-w-[280px] rounded-lg bg-muted object-cover" />
-        </a>
-      ) : (
-        <div className="flex w-[220px] max-w-full items-center gap-2 rounded-lg bg-muted/70 px-3 py-3 text-sm text-muted-foreground">
-          <ImageOff className="h-4 w-4 shrink-0" aria-hidden />
-          <span>{m.media_path ? "Cargando foto…" : "Foto (llegó antes de activar las fotos)"}</span>
-        </div>
-      )}
-      {p.texto && <p className="mt-1.5 px-1 whitespace-pre-wrap break-words">{p.texto}</p>}
+      {cuerpo}
+      {pie && <p className="mt-1.5 px-1 whitespace-pre-wrap break-words">{pie}</p>}
     </div>
   );
 }
