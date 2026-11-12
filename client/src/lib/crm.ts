@@ -45,12 +45,12 @@ export function etiquetaEstado(tipo: "cotizacion" | "pedido", estado: string) {
 
 export function tonoEstado(estado: string): string {
   switch (estado) {
-    case "aceptada": case "entregado": return "bg-emerald-100 text-emerald-800 border-emerald-200";
-    case "perdida": case "cancelado": return "bg-stone-200 text-stone-600 border-stone-300";
-    case "enviada": case "confirmado": return "bg-sky-100 text-sky-800 border-sky-200";
-    case "negociando": case "en_preparacion": return "bg-amber-100 text-amber-900 border-amber-200";
-    case "listo": return "bg-violet-100 text-violet-800 border-violet-200";
-    default: return "bg-pink-100 text-pink-800 border-pink-200";
+    case "aceptada": case "entregado": return "bg-[hsl(86_45%_92%)] text-[hsl(86_55%_24%)] border-[hsl(86_40%_80%)]";
+    case "perdida": case "cancelado": return "bg-stone-100 text-stone-600 border-stone-300";
+    case "enviada": case "confirmado": return "bg-[hsl(211_45%_93%)] text-[hsl(211_50%_32%)] border-[hsl(211_40%_82%)]";
+    case "negociando": case "en_preparacion": return "bg-[hsl(37_80%_92%)] text-[hsl(32_70%_28%)] border-[hsl(37_60%_78%)]";
+    case "listo": return "bg-[hsl(324_40%_94%)] text-[hsl(324_45%_34%)] border-[hsl(324_35%_84%)]";
+    default: return "bg-[hsl(357_85%_95%)] text-[hsl(357_75%_36%)] border-[hsl(357_70%_86%)]";
   }
 }
 

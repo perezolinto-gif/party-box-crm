@@ -41,33 +41,38 @@ function Navegacion({ onNavigate }: { onNavigate?: () => void }) {
   const activo = (h: string) => (h === "/" ? loc === "/" : loc.startsWith(h));
   const item = (n: { href: string; label: string; icon: any; badge?: boolean }) => (
     <Link key={n.href} href={n.href} onClick={onNavigate}
-      className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${activo(n.href) ? "bg-sidebar-accent text-white font-medium" : "text-sidebar-foreground/75 hover:text-white hover:bg-sidebar-accent/60"}`}
+      className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] transition-colors ${activo(n.href) ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold" : "text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-muted"}`}
       data-testid={`link-nav-${n.href.replace("/", "") || "hoy"}`}>
-      <n.icon className="h-4 w-4 shrink-0" />
+      {activo(n.href) && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-primary" aria-hidden />}
+      <n.icon className={`h-[18px] w-[18px] shrink-0 ${activo(n.href) ? "text-primary" : "text-muted-foreground group-hover:text-foreground"}`} />
       <span className="flex-1 min-w-0">{n.label}</span>
       {n.badge && (pendientes?.length ?? 0) > 0 && (
-        <span className="rounded-full bg-sidebar-primary px-2 py-0.5 text-[11px] font-semibold text-white tabular-nums" data-testid="badge-pendientes">{pendientes!.length}</span>
+        <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-bold text-primary-foreground tabular-nums" data-testid="badge-pendientes">{pendientes!.length}</span>
       )}
     </Link>
   );
   return (
-    <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
-      <div className="px-5 py-5"><Marca claro /></div>
+    <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
+      <div className="h-1.5 franjas shrink-0" aria-hidden />
+      <div className="px-5 pt-5 pb-6"><Marca /></div>
       <nav className="flex-1 space-y-0.5 px-3 overflow-y-auto">
         {NAV.map(item)}
         {perfil?.rol === "admin" && (
           <>
-            <p className="px-3 pt-5 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/45">Administración</p>
+            <p className="px-3 pt-6 pb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Administración</p>
             {NAV_ADMIN.map(item)}
           </>
         )}
       </nav>
       <div className="border-t border-sidebar-border p-3">
-        <div className="px-3 py-1.5">
-          <p className="text-sm font-medium text-white truncate" data-testid="text-usuario">{perfil?.nombre}</p>
-          <p className="text-xs text-sidebar-foreground/55">{perfil?.rol === "admin" ? "Administradora" : "Ventas"}</p>
+        <div className="flex items-center gap-3 px-2 py-2">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[hsl(var(--marca-ciruela)/.12)] text-sm font-bold text-[hsl(var(--marca-ciruela))]" aria-hidden>{(perfil?.nombre ?? "?").trim().charAt(0).toUpperCase()}</span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold truncate" data-testid="text-usuario">{perfil?.nombre}</p>
+            <p className="text-xs text-muted-foreground">{perfil?.rol === "admin" ? "Administradora" : "Ventas"}</p>
+          </div>
         </div>
-        <button onClick={salir} className="mt-1 flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-white" data-testid="button-salir">
+        <button onClick={salir} className="mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground" data-testid="button-salir">
           <LogOut className="h-4 w-4" /> Cerrar sesión
         </button>
       </div>
@@ -78,22 +83,22 @@ function Navegacion({ onNavigate }: { onNavigate?: () => void }) {
 function Shell({ children }: { children: ReactNode }) {
   const [abierto, setAbierto] = useState(false);
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[248px_1fr]">
+    <div className="min-h-screen lg:grid lg:grid-cols-[264px_1fr]">
       <aside className="hidden lg:block sticky top-0 h-screen"><Navegacion /></aside>
       <div className="min-w-0">
-        <header className="lg:hidden sticky top-0 z-30 flex items-center justify-between border-b bg-background/95 backdrop-blur px-4 h-14">
-          <Marca />
+        <header className="lg:hidden sticky top-0 z-30 flex items-center justify-between border-b bg-card/95 backdrop-blur px-4 h-16">
+          <Marca tamano="sm" />
           <Sheet open={abierto} onOpenChange={setAbierto}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" aria-label="Abrir menú" data-testid="button-menu"><Menu className="h-5 w-5" /></Button>
             </SheetTrigger>
-            <SheetContent side="left" className="p-0 w-[264px] border-0">
+            <SheetContent side="left" className="p-0 w-[280px] border-0">
               <SheetTitle className="sr-only">Menú</SheetTitle>
               <Navegacion onNavigate={() => setAbierto(false)} />
             </SheetContent>
           </Sheet>
         </header>
-        <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</main>
+        <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-10 lg:py-10">{children}</main>
       </div>
     </div>
   );

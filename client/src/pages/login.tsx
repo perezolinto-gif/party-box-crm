@@ -5,17 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 
-export function Marca({ claro = false }: { claro?: boolean }) {
+export function Marca({ tamano = "md" }: { tamano?: "sm" | "md" | "lg"; claro?: boolean }) {
+  const alto = tamano === "lg" ? "h-28" : tamano === "sm" ? "h-9" : "h-12";
   return (
-    <div className="flex items-center gap-2 select-none" aria-label="Party Box">
-      <span className="grid grid-cols-2 gap-[3px]" aria-hidden>
-        <span className="h-2.5 w-2.5 rounded-[3px] bg-[hsl(333_78%_58%)]" />
-        <span className="h-2.5 w-2.5 rounded-full bg-[hsl(42_92%_55%)]" />
-        <span className="h-2.5 w-2.5 rounded-full bg-[hsl(174_55%_45%)]" />
-        <span className="h-2.5 w-2.5 rounded-[3px] bg-[hsl(262_55%_62%)]" />
-      </span>
-      <span className={`font-semibold tracking-tight ${claro ? "text-white" : "text-foreground"}`}>Party Box</span>
-      <span className={`text-xs font-medium ${claro ? "text-white/60" : "text-muted-foreground"}`}>CRM</span>
+    <div className="flex items-end gap-2 select-none">
+      <img src="./partybox-logo.png" alt="Party Box" className={`${alto} w-auto`} draggable={false} />
+      {tamano !== "lg" && <span className="mb-0.5 rounded-md bg-foreground px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-background">CRM</span>}
     </div>
   );
 }
@@ -48,19 +43,28 @@ export default function Login() {
 
   return (
     <div className="min-h-screen grid lg:grid-cols-[1fr_minmax(420px,520px)] bg-background">
-      <div className="hidden lg:flex flex-col justify-between bg-sidebar text-sidebar-foreground p-10 relative overflow-hidden">
-        <Marca claro />
-        <div className="relative z-10 max-w-md">
-          <p className="text-xl font-semibold leading-snug text-white">Cada mensaje de WhatsApp puede ser un pedido. Que ninguno se quede sin respuesta.</p>
-          <p className="mt-3 text-sm text-white/65">Pedidos, cotizaciones y seguimientos de Party Box en un solo lugar.</p>
+      <div className="hidden lg:flex flex-col justify-between bg-card border-r p-12 relative overflow-hidden">
+        <div className="absolute inset-x-0 top-0 h-2 franjas" aria-hidden />
+        <Marca tamano="lg" />
+        <div className="relative z-10 max-w-lg">
+          <p className="font-display text-[2.5rem] font-extrabold leading-[1.05] tracking-tight">
+            Cada mensaje de WhatsApp puede ser <span className="text-primary">una fiesta vendida.</span>
+          </p>
+          <p className="mt-4 text-base text-muted-foreground">Pedidos, cotizaciones y seguimientos de Party Box en un solo lugar.</p>
+          <div className="mt-8 flex flex-wrap gap-2">
+            {["Bandeja de WhatsApp", "Cotizaciones", "Pedidos", "Seguimiento"].map((t, i) => (
+              <span key={t} className="rounded-full border px-3 py-1 text-sm font-medium" style={{ borderColor: `hsl(var(--${COLORES[i]}) / .35)`, color: `hsl(var(--${COLORES[i]}))`, background: `hsl(var(--${COLORES[i]}) / .07)` }}>{t}</span>
+            ))}
+          </div>
         </div>
+        <p className="relative z-10 text-xs text-muted-foreground">Camino de Oriente, Managua</p>
         <Confeti />
       </div>
       <div className="flex items-center justify-center p-6">
         <form onSubmit={enviar} className="w-full max-w-sm space-y-5" data-testid="form-login">
-          <div className="lg:hidden"><Marca /></div>
+          <div className="lg:hidden flex justify-center pb-2"><Marca /></div>
           <div>
-            <h1 className="text-xl font-semibold">{modo === "entrar" ? "Iniciar sesión" : "Crear mi cuenta"}</h1>
+            <h1 className="text-2xl font-bold">{modo === "entrar" ? "Iniciar sesión" : "Crear mi cuenta"}</h1>
             <p className="text-sm text-muted-foreground mt-1">
               {modo === "entrar" ? "Usa el correo con el que te invitaron." : "Solo para correos invitados por la administradora."}
             </p>
@@ -82,7 +86,7 @@ export default function Login() {
           </div>
           {error && <p className="text-sm text-destructive" role="alert" data-testid="text-error">{error}</p>}
           {aviso && <p className="text-sm text-emerald-700">{aviso}</p>}
-          <Button type="submit" className="w-full" disabled={cargando} data-testid="button-submit">
+          <Button type="submit" size="lg" className="w-full" disabled={cargando} data-testid="button-submit">
             {cargando && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
             {modo === "entrar" ? "Entrar" : "Crear cuenta"}
           </Button>
@@ -95,16 +99,17 @@ export default function Login() {
   );
 }
 
+const COLORES = ["marca-ciruela", "marca-rojo", "marca-ocre", "marca-azul", "marca-verde"];
+
 function Confeti() {
   const piezas = [
-    [12, 18, "333 78% 58%", 0], [72, 10, "42 92% 55%", 1], [84, 46, "174 55% 45%", 0], [30, 62, "262 55% 62%", 1],
-    [60, 72, "333 78% 58%", 1], [90, 82, "42 92% 55%", 0], [8, 88, "174 55% 45%", 1], [46, 30, "42 92% 55%", 0],
+    [78, 14, 0, 0], [88, 30, 1, 1], [70, 40, 2, 0], [92, 56, 3, 1], [82, 72, 4, 0], [66, 86, 0, 1], [94, 90, 1, 0], [58, 22, 3, 1],
   ] as const;
   return (
-    <svg className="absolute inset-0 w-full h-full opacity-70" aria-hidden>
+    <svg className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden>
       {piezas.map(([x, y, c, f], i) =>
-        f ? <circle key={i} cx={`${x}%`} cy={`${y}%`} r={7 + (i % 3) * 4} fill={`hsl(${c})`} opacity={0.55} />
-          : <rect key={i} x={`${x}%`} y={`${y}%`} width={16 + (i % 2) * 8} height={16 + (i % 2) * 8} rx={4} fill={`hsl(${c})`} opacity={0.5} transform={`rotate(${i * 17})`} style={{ transformBox: "fill-box", transformOrigin: "center" }} />,
+        f ? <circle key={i} cx={`${x}%`} cy={`${y}%`} r={5 + (i % 3) * 3} fill={`hsl(var(--${COLORES[c]}))`} opacity={0.5} />
+          : <rect key={i} x={`${x}%`} y={`${y}%`} width={7} height={26 + (i % 2) * 10} rx={2} fill={`hsl(var(--${COLORES[c]}))`} opacity={0.55} transform={`rotate(${(i * 23) % 50 - 25})`} style={{ transformBox: "fill-box", transformOrigin: "center" }} />,
       )}
     </svg>
   );

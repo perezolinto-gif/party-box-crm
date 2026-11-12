@@ -30,7 +30,7 @@ export default function Clientes() {
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input className="pl-9" placeholder="Buscar por nombre o teléfono" value={q} onChange={(e) => setQ(e.target.value)} data-testid="input-buscar-clientes" />
       </div>
-      <div className="overflow-hidden rounded-xl border bg-card divide-y">
+      <div className="overflow-hidden tarjeta divide-y">
         {isLoading && <div className="p-4 space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-10 w-full" />)}</div>}
         {!isLoading && !lista.length && <p className="px-4 py-12 text-center text-sm text-muted-foreground">Aún no hay clientes.</p>}
         {lista.map((c) => {
@@ -38,7 +38,7 @@ export default function Clientes() {
           const vendido = suyos.filter((d) => d.tipo === "pedido" && d.estado !== "cancelado" && d.moneda === "NIO").reduce((s, d) => s + Number(d.total), 0);
           return (
             <Link key={c.id} href={`/clientes/${c.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50" data-testid={`row-cliente-${c.id}`}>
-              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">{c.nombre.charAt(0).toUpperCase()}</div>
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[hsl(var(--marca-ciruela)/.12)] text-sm font-bold text-[hsl(var(--marca-ciruela))]">{c.nombre.charAt(0).toUpperCase()}</div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium truncate">{c.nombre}</p>
                 <p className="text-xs text-muted-foreground">{c.telefono ? `+${c.telefono}` : "Sin teléfono"}{c.origen === "whatsapp" ? " · WhatsApp" : ""}</p>
@@ -122,9 +122,9 @@ export function ClienteDetalle({ id }: { id: string }) {
       {cliente.notas && <p className="mb-5 rounded-lg border bg-accent/50 px-4 py-2.5 text-sm">{cliente.notas}</p>}
       <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
         <div className="space-y-5 min-w-0">
-          <section className="rounded-xl border bg-card">
+          <section className="tarjeta">
             <div className="flex items-center justify-between border-b px-4 py-3">
-              <h2 className="text-sm font-semibold">Cotizaciones y pedidos</h2>
+              <h2 className="text-base font-bold">Cotizaciones y pedidos</h2>
               <div className="flex gap-2">
                 <Button size="sm" variant="ghost" asChild><Link href="/nuevo/cotizacion" onClick={() => prepararBorrador({ cliente_id: id })}>+ Cotización</Link></Button>
                 <Button size="sm" variant="ghost" asChild><Link href="/nuevo/pedido" onClick={() => prepararBorrador({ cliente_id: id })}>+ Pedido</Link></Button>
@@ -133,8 +133,8 @@ export function ClienteDetalle({ id }: { id: string }) {
             {suyos.length ? <div className="divide-y">{suyos.map((d) => <FilaDoc key={d.id} d={d} detalle={d.fecha_evento ? `evento ${fechaCorta(d.fecha_evento)}` : `creado ${fechaCorta(d.creado_en)}`} />)}</div>
               : <p className="px-4 py-8 text-center text-sm text-muted-foreground">Sin documentos todavía.</p>}
           </section>
-          <section className="rounded-xl border bg-card">
-            <h2 className="border-b px-4 py-3 text-sm font-semibold">Conversación de WhatsApp</h2>
+          <section className="tarjeta">
+            <h2 className="border-b px-4 py-3 text-base font-bold">Conversación de WhatsApp</h2>
             <div className="max-h-[480px] space-y-2 overflow-y-auto bg-[hsl(36_30%_95%)] p-4" data-testid="list-mensajes">
               {!mensajes.length && <p className="py-6 text-center text-sm text-muted-foreground">Sin mensajes registrados.</p>}
               {mensajes.map((m) => (

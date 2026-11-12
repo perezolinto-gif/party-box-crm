@@ -41,7 +41,7 @@ export function Catalogo() {
       )}
       <div className="space-y-5">
         {Object.entries(porCat).map(([cat, ps]) => (
-          <section key={cat} className="overflow-hidden rounded-xl border bg-card">
+          <section key={cat} className="overflow-hidden tarjeta">
             <h2 className="border-b px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{cat}</h2>
             <div className="divide-y">
               {ps.map((p) => (
@@ -116,8 +116,8 @@ export function Equipo() {
   return (
     <div>
       <Encabezado titulo="Equipo" sub="Invita por correo; cada persona crea su propia contraseña." />
-      <section className="mb-5 rounded-xl border bg-card p-4 sm:p-5">
-        <h2 className="mb-3 text-sm font-semibold">Invitar a alguien</h2>
+      <section className="mb-5 tarjeta p-4 sm:p-5">
+        <h2 className="mb-3 text-base font-bold">Invitar a alguien</h2>
         <div className="grid gap-3 sm:grid-cols-[1fr_1fr_150px_auto] sm:items-end">
           <div className="space-y-1.5"><Label>Nombre</Label><Input value={nuevo.nombre} onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })} data-testid="input-invitar-nombre" /></div>
           <div className="space-y-1.5"><Label>Correo</Label><Input type="email" value={nuevo.email} onChange={(e) => setNuevo({ ...nuevo, email: e.target.value })} data-testid="input-invitar-email" /></div>
@@ -132,8 +132,8 @@ export function Equipo() {
         <p className="mt-2 text-xs text-muted-foreground">Ventas: clientes, cotizaciones, pedidos y bandeja. Administradora: además catálogo, equipo y conexión de WhatsApp.</p>
       </section>
 
-      <section className="mb-5 overflow-hidden rounded-xl border bg-card">
-        <h2 className="border-b px-4 py-3 text-sm font-semibold">Miembros</h2>
+      <section className="mb-5 overflow-hidden tarjeta">
+        <h2 className="border-b px-4 py-3 text-base font-bold">Miembros</h2>
         <div className="divide-y">
           {perfiles?.map((p) => (
             <div key={p.id} className="flex flex-wrap items-center gap-3 px-4 py-3" data-testid={`row-miembro-${p.id}`}>
@@ -150,8 +150,8 @@ export function Equipo() {
       </section>
 
       {(inv.data ?? []).some((i: any) => !i.usado_en) && (
-        <section className="overflow-hidden rounded-xl border bg-card">
-          <h2 className="border-b px-4 py-3 text-sm font-semibold">Invitaciones pendientes</h2>
+        <section className="overflow-hidden tarjeta">
+          <h2 className="border-b px-4 py-3 text-base font-bold">Invitaciones pendientes</h2>
           <div className="divide-y">
             {(inv.data ?? []).filter((i: any) => !i.usado_en).map((i: any) => (
               <div key={i.email} className="flex items-center gap-3 px-4 py-3">
@@ -206,7 +206,7 @@ export function WhatsappConfig() {
   return (
     <div className="max-w-3xl">
       <Encabezado titulo="Conexión WhatsApp" sub="Conecta el número que Party Box ya usa en la app WhatsApp Business. La app del teléfono sigue funcionando igual." />
-      <section className="mb-5 flex items-start gap-3 rounded-xl border bg-card p-4">
+      <section className="mb-5 flex items-start gap-3 tarjeta p-4">
         {conectado ? <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" /> : <CircleDashed className="h-5 w-5 text-muted-foreground shrink-0" />}
         <div className="text-sm">
           <p className="font-medium" data-testid="text-estado-conexion">{conectado ? "Recibiendo mensajes" : "Aún sin conexión"}</p>
@@ -214,7 +214,7 @@ export function WhatsappConfig() {
         </div>
       </section>
 
-      <section className="mb-5 rounded-xl border bg-card p-4 sm:p-5 text-sm space-y-4">
+      <section className="mb-5 tarjeta p-4 sm:p-5 text-sm space-y-4">
         <div>
           <h2 className="font-semibold">Conectar con YCloud (recomendado)</h2>
           <p className="text-muted-foreground">Proveedor oficial de Meta. Plan gratis, sin recargo por mensaje. Los mensajes que el equipo responde desde la app no tienen costo.</p>
@@ -248,7 +248,7 @@ export function WhatsappConfig() {
         </div>
       </section>
 
-      <details className="mb-5 rounded-xl border bg-card p-4 sm:p-5 text-sm">
+      <details className="mb-5 tarjeta p-4 sm:p-5 text-sm">
         <summary className="cursor-pointer font-semibold">Otra opción: app de Meta propia o 360dialog</summary>
         <div className="mt-4 space-y-4">
           <Dato label="URL del webhook (Callback URL)" valor={WEBHOOK_URL} onCopy={copiar} testid="webhook-url-meta" />

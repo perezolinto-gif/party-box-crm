@@ -47,7 +47,7 @@ export default function Documentos({ tipo }: { tipo: "cotizacion" | "pedido" }) 
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border bg-card">
+      <div className="overflow-hidden tarjeta">
         <div className="hidden md:grid grid-cols-[90px_1.4fr_110px_120px_120px_110px] gap-3 border-b px-4 py-2.5 text-xs font-medium text-muted-foreground">
           <span>Número</span><span>Cliente</span><span>Evento</span><span className="text-right">{tipo === "pedido" ? "Saldo" : "Total"}</span><span>Seguimiento</span><span>Estado</span>
         </div>

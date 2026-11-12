@@ -95,7 +95,7 @@ function PegarMensaje() {
 
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
-      <section className="rounded-xl border bg-card p-4 sm:p-5 space-y-4">
+      <section className="tarjeta p-4 sm:p-5 space-y-4">
         <div className="space-y-1.5">
           <Label>Mensaje del cliente</Label>
           <Textarea rows={7} placeholder="Pega aquí lo que el cliente escribió en WhatsApp…" value={texto} onChange={(e) => setTexto(e.target.value)} data-testid="input-texto-pegado" />
@@ -117,8 +117,8 @@ function PegarMensaje() {
           </div>
         )}
       </section>
-      <aside className="rounded-xl border bg-card p-4 space-y-4 h-fit">
-        <h2 className="flex items-center gap-2 text-sm font-semibold"><Wand2 className="h-4 w-4 text-primary" />Lo que se detectó</h2>
+      <aside className="tarjeta p-4 space-y-4 h-fit">
+        <h2 className="flex items-center gap-2 text-base font-bold"><Wand2 className="h-4 w-4 text-primary" />Lo que se detectó</h2>
         {ex ? <Resultado ex={ex} /> : <p className="text-sm text-muted-foreground">Pega un mensaje para analizarlo.</p>}
         <div className="grid gap-2">
           <Button disabled={!texto.trim() || !clienteListo} variant={ex?.tipo === "pedido" ? "outline" : "default"} onClick={() => crear("cotizacion")} data-testid="button-pegar-cotizacion"><FileText className="h-4 w-4 mr-1" />Crear cotización</Button>
@@ -201,7 +201,7 @@ function SubirChat() {
 
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
-      <section className="rounded-xl border bg-card p-4 sm:p-5 space-y-4">
+      <section className="tarjeta p-4 sm:p-5 space-y-4">
         <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 text-center hover:bg-muted/50" data-testid="dropzone-chat">
           <FileUp className="h-7 w-7 text-muted-foreground" />
           <span className="text-sm font-medium">{archivo || "Selecciona el archivo .txt del chat"}</span>
@@ -228,8 +228,8 @@ function SubirChat() {
           </>
         )}
       </section>
-      <aside className="rounded-xl border bg-card p-4 space-y-3 h-fit">
-        <h2 className="text-sm font-semibold">Importar</h2>
+      <aside className="tarjeta p-4 space-y-3 h-fit">
+        <h2 className="text-base font-bold">Importar</h2>
         <p className="text-sm text-muted-foreground">Los mensajes se guardan en la ficha del cliente. Los que parezcan pedidos o cotizaciones pasan a la Bandeja. Si importas el mismo chat dos veces, no se duplica.</p>
         <Button className="w-full" disabled={!lineas?.length || !negocio || !(nombre.trim() || tel.trim()) || procesando} onClick={importar} data-testid="button-importar">
           {procesando && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}Importar chat

@@ -158,7 +158,7 @@ export default function DocumentoEditor({ id, nuevoTipo }: { id?: string; nuevoT
 
       <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
         <div className="space-y-5 min-w-0">
-          <section className="rounded-xl border bg-card p-4 sm:p-5 space-y-4">
+          <section className="tarjeta p-4 sm:p-5 space-y-4">
             <SelectorCliente clientes={clientes ?? []} valor={f.cliente_id ?? null} onChange={(v) => { set("cliente_id", v); setNuevoCliente(null); }} nuevo={nuevoCliente} setNuevo={setNuevoCliente} />
             <div className="grid gap-4 sm:grid-cols-3">
               <Campo label="Fecha del evento"><Input type="date" value={f.fecha_evento ?? ""} onChange={(e) => set("fecha_evento", e.target.value)} data-testid="input-fecha-evento" /></Campo>
@@ -173,9 +173,9 @@ export default function DocumentoEditor({ id, nuevoTipo }: { id?: string; nuevoT
             <Campo label="Lugar / dirección de entrega"><Input value={f.lugar ?? ""} onChange={(e) => set("lugar", e.target.value)} placeholder="Ej. Residencial Las Colinas, casa 45" data-testid="input-lugar" /></Campo>
           </section>
 
-          <section className="rounded-xl border bg-card">
+          <section className="tarjeta">
             <div className="flex items-center justify-between border-b px-4 py-3">
-              <h2 className="text-sm font-semibold">Productos y servicios</h2>
+              <h2 className="text-base font-bold">Productos y servicios</h2>
               <Select value={f.moneda ?? "NIO"} onValueChange={(v) => set("moneda", v)}>
                 <SelectTrigger className="h-8 w-[120px]" data-testid="select-moneda"><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="NIO">Córdobas</SelectItem><SelectItem value="USD">Dólares</SelectItem></SelectContent>
@@ -208,7 +208,7 @@ export default function DocumentoEditor({ id, nuevoTipo }: { id?: string; nuevoT
             </div>
           </section>
 
-          <section className="rounded-xl border bg-card p-4 sm:p-5 grid gap-4 sm:grid-cols-2">
+          <section className="tarjeta p-4 sm:p-5 grid gap-4 sm:grid-cols-2">
             <Campo label="Anticipo recibido"><Input type="number" min={0} step="0.01" value={f.anticipo ?? 0} onChange={(e) => set("anticipo", e.target.value)} data-testid="input-anticipo" /></Campo>
             <div className="self-end text-sm"><span className="text-muted-foreground">Saldo pendiente: </span><span className="font-semibold tabular-nums" data-testid="text-saldo">{dinero(total - (Number(f.anticipo) || 0), f.moneda)}</span></div>
             <div className="sm:col-span-2"><Campo label="Notas (se incluyen al enviar por WhatsApp)"><Textarea rows={3} value={f.notas ?? ""} onChange={(e) => set("notas", e.target.value)} data-testid="input-notas" /></Campo></div>
@@ -216,8 +216,8 @@ export default function DocumentoEditor({ id, nuevoTipo }: { id?: string; nuevoT
         </div>
 
         <aside className="space-y-5 min-w-0">
-          <section className="rounded-xl border bg-card p-4 space-y-4">
-            <h2 className="text-sm font-semibold">Seguimiento</h2>
+          <section className="tarjeta p-4 space-y-4">
+            <h2 className="text-base font-bold">Seguimiento</h2>
             <Campo label="Próximo seguimiento"><Input type="date" value={f.proximo_seguimiento ?? ""} onChange={(e) => set("proximo_seguimiento", e.target.value)} data-testid="input-seguimiento" /></Campo>
             <div className="flex flex-wrap gap-1.5">
               {[["Mañana", 1], ["3 días", 3], ["1 semana", 7]].map(([l, n]) => (
@@ -241,8 +241,8 @@ export default function DocumentoEditor({ id, nuevoTipo }: { id?: string; nuevoT
           </section>
 
           {docQ.data?.origen && (
-            <section className="rounded-xl border bg-card p-4">
-              <h2 className="text-sm font-semibold mb-2">Mensaje de origen</h2>
+            <section className="tarjeta p-4">
+              <h2 className="text-base font-bold mb-2">Mensaje de origen</h2>
               <p className="whitespace-pre-wrap rounded-lg bg-muted px-3 py-2 text-sm">{docQ.data.origen.texto}</p>
               <p className="mt-1 text-xs text-muted-foreground">{fechaHora(docQ.data.origen.enviado_en)}</p>
             </section>
@@ -322,8 +322,8 @@ export function Bitacora({ docId, clienteId, seguimientos, perfiles }: { docId: 
     invalidar("documento", "cliente");
   }
   return (
-    <section className="rounded-xl border bg-card p-4">
-      <h2 className="text-sm font-semibold mb-3">Bitácora</h2>
+    <section className="tarjeta p-4">
+      <h2 className="text-base font-bold mb-3">Bitácora</h2>
       <div className="space-y-2">
         <Select value={tipo} onValueChange={setTipo}>
           <SelectTrigger className="h-8" data-testid="select-tipo-seguimiento"><SelectValue /></SelectTrigger>

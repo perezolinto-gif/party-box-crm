@@ -3,14 +3,14 @@ import { useDocumentos, useDetecciones, ESTADOS_CERRADOS, hoyISO, fechaCorta, di
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Inbox, CalendarClock, PartyPopper, ArrowRight } from "lucide-react";
+import { Plus, Inbox, CalendarClock, PartyPopper, ArrowRight, ShoppingBag, FileText, MessageCircle, Gift } from "lucide-react";
 
 export function Encabezado({ titulo, sub, acciones }: { titulo: string; sub?: string; acciones?: React.ReactNode }) {
   return (
-    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
-        <h1 className="text-xl font-semibold tracking-tight" data-testid="text-titulo">{titulo}</h1>
-        {sub && <p className="mt-1 text-sm text-muted-foreground">{sub}</p>}
+        <h1 className="font-display text-[1.75rem] sm:text-[2rem] font-extrabold leading-tight tracking-tight" data-testid="text-titulo">{titulo}</h1>
+        {sub && <p className="mt-1.5 text-[15px] text-muted-foreground">{sub}</p>}
       </div>
       {acciones && <div className="flex flex-wrap gap-2">{acciones}</div>}
     </div>
@@ -23,28 +23,36 @@ export function EstadoPill({ d }: { d: Pick<Documento, "tipo" | "estado"> }) {
 
 export function FilaDoc({ d, detalle }: { d: Documento; detalle?: React.ReactNode }) {
   return (
-    <Link href={`/documento/${d.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/60 transition-colors" data-testid={`row-doc-${d.id}`}>
+    <Link href={`/documento/${d.id}`} className="flex items-center gap-3 px-5 py-3.5 hover:bg-muted/60 transition-colors" data-testid={`row-doc-${d.id}`}>
+      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${d.tipo === "pedido" ? "bg-[hsl(var(--marca-verde)/.12)] text-[hsl(var(--marca-verde))]" : "bg-[hsl(var(--marca-azul)/.12)] text-[hsl(var(--marca-azul))]"}`} aria-hidden>
+        {d.tipo === "pedido" ? <ShoppingBag className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+      </span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium truncate">{d.clientes?.nombre ?? "Sin cliente"}</p>
+        <p className="text-[15px] font-semibold truncate">{d.clientes?.nombre ?? "Sin cliente"}</p>
         <p className="text-xs text-muted-foreground truncate">{d.numero}{detalle ? <> · {detalle}</> : null}</p>
       </div>
       <div className="text-right shrink-0">
-        <p className="text-sm font-medium tabular-nums">{dinero(d.total, d.moneda)}</p>
+        <p className="text-[15px] font-semibold tabular-nums">{dinero(d.total, d.moneda)}</p>
         <EstadoPill d={d} />
       </div>
     </Link>
   );
 }
 
-function Panel({ titulo, icono: Icono, children, vacio, enlace }: { titulo: string; icono: any; children: React.ReactNode[] | React.ReactNode; vacio: string; enlace?: { href: string; label: string } }) {
-  const lista = Array.isArray(children) ? children : [children];
+function Panel({ titulo, icono: Icono, color = "marca-rojo", children, vacio, enlace }: { titulo: string; icono: any; color?: string; children: React.ReactNode[] | React.ReactNode; vacio: string; enlace?: { href: string; label: string } }) {
+  const lista = (Array.isArray(children) ? children : [children]).filter(Boolean);
   return (
-    <section className="rounded-xl border bg-card">
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <h2 className="flex items-center gap-2 text-sm font-semibold"><Icono className="h-4 w-4 text-primary" />{titulo}</h2>
-        {enlace && <Link href={enlace.href} className="text-xs font-medium text-primary hover:underline flex items-center gap-1">{enlace.label}<ArrowRight className="h-3 w-3" /></Link>}
+    <section className="tarjeta overflow-hidden">
+      <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3">
+        <h2 className="flex items-center gap-2.5 text-base font-bold">
+          <span className="grid h-8 w-8 place-items-center rounded-lg" style={{ background: `hsl(var(--${color}) / .12)`, color: `hsl(var(--${color}))` }}><Icono className="h-4 w-4" /></span>
+          {titulo}
+        </h2>
+        {enlace && <Link href={enlace.href} className="text-sm font-semibold text-primary hover:underline flex items-center gap-1 shrink-0">{enlace.label}<ArrowRight className="h-3.5 w-3.5" /></Link>}
       </div>
-      {lista.length ? <div className="divide-y">{lista}</div> : <p className="px-4 py-8 text-center text-sm text-muted-foreground">{vacio}</p>}
+      {lista.length ? <div className="divide-y border-t">{lista}</div> : (
+        <div className="mx-5 mb-5 rounded-xl border border-dashed px-4 py-7 text-center text-sm text-muted-foreground">{vacio}</div>
+      )}
     </section>
   );
 }
@@ -65,53 +73,64 @@ export default function Inicio() {
   const fechaLarga = new Date().toLocaleDateString("es-NI", { weekday: "long", day: "numeric", month: "long" });
 
   const cifras = [
-    { label: "Por revisar en WhatsApp", valor: det?.length ?? 0, href: "/bandeja" },
-    { label: "Seguimientos pendientes", valor: seguimientos.length, href: "/cotizaciones" },
-    { label: "Eventos en 14 días", valor: eventos.length, href: "/pedidos" },
-    { label: "Cotizaciones abiertas", valor: cotAbiertas.length, href: "/cotizaciones" },
+    { label: "Por revisar en WhatsApp", valor: det?.length ?? 0, href: "/bandeja", icono: MessageCircle, color: "marca-rojo" },
+    { label: "Seguimientos pendientes", valor: seguimientos.length, href: "/cotizaciones", icono: CalendarClock, color: "marca-ocre" },
+    { label: "Eventos en 14 días", valor: eventos.length, href: "/pedidos", icono: PartyPopper, color: "marca-verde" },
+    { label: "Cotizaciones abiertas", valor: cotAbiertas.length, href: "/cotizaciones", icono: FileText, color: "marca-azul" },
   ];
+  const nombre = perfil?.nombre?.split(" ")[0] ?? "";
+  const resumen = (det?.length ?? 0) + seguimientos.length === 0
+    ? "Todo al día. Cuando entre un pedido por WhatsApp aparecerá aquí."
+    : `Tienes ${det?.length ?? 0} ${(det?.length ?? 0) === 1 ? "mensaje" : "mensajes"} por revisar y ${seguimientos.length} ${seguimientos.length === 1 ? "seguimiento" : "seguimientos"} para hoy.`;
 
   return (
     <div>
-      <Encabezado
-        titulo={`Hola, ${perfil?.nombre?.split(" ")[0] ?? ""}`}
-        sub={fechaLarga.charAt(0).toUpperCase() + fechaLarga.slice(1)}
-        acciones={<>
-          <Button variant="outline" asChild data-testid="button-nueva-cotizacion"><Link href="/nuevo/cotizacion"><Plus className="h-4 w-4 mr-1" />Cotización</Link></Button>
-          <Button asChild data-testid="button-nuevo-pedido"><Link href="/nuevo/pedido"><Plus className="h-4 w-4 mr-1" />Pedido</Link></Button>
-        </>}
-      />
+      <section className="tarjeta relative mb-6 overflow-hidden">
+        <div className="h-2 franjas" aria-hidden />
+        <div className="flex flex-col gap-5 p-6 sm:flex-row sm:items-center sm:justify-between sm:p-7">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold uppercase tracking-[0.12em] text-muted-foreground">{fechaLarga.charAt(0).toUpperCase() + fechaLarga.slice(1)}</p>
+            <h1 className="mt-1 font-display text-[2rem] sm:text-[2.5rem] font-extrabold leading-[1.05] tracking-tight" data-testid="text-titulo">Hola, {nombre}</h1>
+            <p className="mt-2 max-w-xl text-[15px] text-muted-foreground">{resumen}</p>
+          </div>
+          <div className="flex flex-wrap gap-2 shrink-0">
+            <Button variant="outline" size="lg" asChild data-testid="button-nueva-cotizacion"><Link href="/nuevo/cotizacion"><Plus className="h-4 w-4 mr-1" />Cotización</Link></Button>
+            <Button size="lg" asChild data-testid="button-nuevo-pedido"><Link href="/nuevo/pedido"><Gift className="h-4 w-4 mr-1.5" />Nuevo pedido</Link></Button>
+          </div>
+        </div>
+      </section>
 
-      <div className="mb-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border lg:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         {cifras.map((c) => (
-          <Link key={c.label} href={c.href} className="bg-card px-4 py-3.5 hover:bg-muted/50" data-testid={`stat-${c.label}`}>
-            <p className="text-xs text-muted-foreground">{c.label}</p>
-            {isLoading ? <Skeleton className="mt-1 h-7 w-10" /> : <p className="mt-0.5 text-xl font-semibold tabular-nums">{c.valor}</p>}
+          <Link key={c.label} href={c.href} className="tarjeta group p-4 sm:p-5 transition-transform hover:-translate-y-0.5" data-testid={`stat-${c.label}`}>
+            <span className="grid h-10 w-10 place-items-center rounded-xl" style={{ background: `hsl(var(--${c.color}) / .12)`, color: `hsl(var(--${c.color}))` }}><c.icono className="h-5 w-5" /></span>
+            {isLoading ? <Skeleton className="mt-3 h-9 w-12" /> : <p className="mt-3 font-display text-[2rem] font-extrabold leading-none tabular-nums">{c.valor}</p>}
+            <p className="mt-1.5 text-sm text-muted-foreground leading-snug">{c.label}</p>
           </Link>
         ))}
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <Panel titulo="Dar seguimiento hoy" icono={CalendarClock} vacio="Nada vencido. Buen trabajo." enlace={{ href: "/cotizaciones", label: "Ver todo" }}>
+        <Panel titulo="Dar seguimiento hoy" icono={CalendarClock} color="marca-ocre" vacio="Nada vencido. Buen trabajo." enlace={{ href: "/cotizaciones", label: "Ver todo" }}>
           {seguimientos.slice(0, 8).map((d) => (
             <FilaDoc key={d.id} d={d} detalle={d.proximo_seguimiento! < hoy ? <span className="text-destructive font-medium">vencido {fechaCorta(d.proximo_seguimiento)}</span> : "hoy"} />
           ))}
         </Panel>
-        <Panel titulo="Próximos eventos" icono={PartyPopper} vacio="No hay pedidos con evento en los próximos 14 días." enlace={{ href: "/pedidos", label: "Pedidos" }}>
+        <Panel titulo="Próximos eventos" icono={PartyPopper} color="marca-verde" vacio="No hay pedidos con evento en los próximos 14 días." enlace={{ href: "/pedidos", label: "Pedidos" }}>
           {eventos.slice(0, 8).map((d) => <FilaDoc key={d.id} d={d} detalle={`${fechaCorta(d.fecha_evento)}${d.hora_evento ? " · " + d.hora_evento : ""}`} />)}
         </Panel>
-        <Panel titulo="Detectado en WhatsApp" icono={Inbox} vacio="Sin mensajes nuevos por revisar." enlace={{ href: "/bandeja", label: "Abrir bandeja" }}>
+        <Panel titulo="Detectado en WhatsApp" icono={Inbox} color="marca-rojo" vacio="Sin mensajes nuevos por revisar." enlace={{ href: "/bandeja", label: "Abrir bandeja" }}>
           {(det ?? []).slice(0, 5).map((x) => (
-            <Link key={x.id} href="/bandeja" className="block px-4 py-3 hover:bg-muted/60" data-testid={`row-det-${x.id}`}>
+            <Link key={x.id} href="/bandeja" className="block px-5 py-3.5 hover:bg-muted/60" data-testid={`row-det-${x.id}`}>
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium truncate">{x.clientes?.nombre ?? x.mensajes?.telefono}</p>
+                <p className="text-[15px] font-semibold truncate">{x.clientes?.nombre ?? x.mensajes?.telefono}</p>
                 <span className="text-xs text-muted-foreground shrink-0">{x.tipo_sugerido === "pedido" ? "Posible pedido" : "Posible cotización"}</span>
               </div>
               <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{x.mensajes?.texto}</p>
             </Link>
           ))}
         </Panel>
-        <Panel titulo="Cotizaciones sin fecha de seguimiento" icono={CalendarClock} vacio="Todas tienen seguimiento programado.">
+        <Panel titulo="Cotizaciones sin fecha de seguimiento" icono={FileText} color="marca-azul" vacio="Todas tienen seguimiento programado.">
           {sinSeguimiento.slice(0, 6).map((d) => <FilaDoc key={d.id} d={d} detalle={`creada ${fechaCorta(d.creado_en)}`} />)}
         </Panel>
       </div>

@@ -71,7 +71,7 @@ export default function Bandeja() {
           const tel = d.clientes?.telefono ?? d.mensajes?.telefono;
           const wa = waLink(tel);
           return (
-            <article key={d.id} className="rounded-xl border bg-card" data-testid={`card-deteccion-${d.id}`}>
+            <article key={d.id} className="tarjeta" data-testid={`card-deteccion-${d.id}`}>
               <div className="flex flex-wrap items-start justify-between gap-2 px-4 pt-4">
                 <div className="min-w-0">
                   {d.cliente_id ? (
@@ -79,7 +79,7 @@ export default function Bandeja() {
                   ) : <p className="text-sm font-semibold">{d.mensajes?.nombre_contacto ?? tel}</p>}
                   <p className="text-xs text-muted-foreground">{tel ? `+${tel}` : ""} · {d.mensajes ? fechaHora(d.mensajes.enviado_en) : ""}</p>
                 </div>
-                <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${d.tipo_sugerido === "pedido" ? "bg-emerald-100 text-emerald-800" : "bg-sky-100 text-sky-800"}`}>
+                <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${d.tipo_sugerido === "pedido" ? "bg-[hsl(86_45%_92%)] text-[hsl(86_55%_24%)]" : "bg-[hsl(211_45%_93%)] text-[hsl(211_50%_32%)]"}`}>
                   {d.tipo_sugerido === "pedido" ? "Posible pedido" : "Posible cotización"} · {d.confianza}%
                 </span>
               </div>
