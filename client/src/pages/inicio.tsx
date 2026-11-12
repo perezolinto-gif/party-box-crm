@@ -108,7 +108,7 @@ export default function Inicio() {
             <span className="relative grid h-10 w-10 place-items-center rounded-xl bg-white/20"><c.icono className="h-5 w-5" /></span>
             {(isLoading || (c as any).cargando) ? <Skeleton className="mt-3 h-9 w-12 bg-white/30" /> : <p className="relative mt-3 font-display text-[2rem] font-extrabold leading-none tabular-nums">{c.valor}</p>}
             <p className="relative mt-1.5 text-sm font-medium leading-snug text-white/95">{c.label}</p>
-            {(c as any).detalle && <p className="relative mt-2 inline-block rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-semibold tabular-nums" data-testid="text-detalle-mensajes">{(c as any).detalle}</p>}
+            {(c as any).detalle && <p className="relative mt-2 inline-block rounded-lg bg-white/20 px-2.5 py-1 text-xs leading-snug font-semibold tabular-nums" data-testid="text-detalle-mensajes">{(c as any).detalle}</p>}
           </Link>
         ))}
       </div>
