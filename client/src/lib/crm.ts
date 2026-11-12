@@ -141,19 +141,23 @@ export function useClientes() {
   });
 }
 
-/** Total de mensajes entrantes de WhatsApp desde la medianoche (hora del dispositivo). */
+/** Mensajes de WhatsApp desde la medianoche (hora del dispositivo): recibidos de clientes y respondidos por el equipo. */
 export function useMensajesHoy() {
   return useQuery({
     queryKey: ["mensajes", "hoy"],
     queryFn: async () => {
       const inicio = new Date(); inicio.setHours(0, 0, 0, 0);
-      const { count, error } = await supabase
-        .from("mensajes")
-        .select("id", { count: "exact", head: true })
-        .eq("direccion", "entrante")
-        .gte("enviado_en", inicio.toISOString());
-      if (error) throw error;
-      return count ?? 0;
+      const contar = async (direccion: "entrante" | "saliente") => {
+        const { count, error } = await supabase
+          .from("mensajes")
+          .select("id", { count: "exact", head: true })
+          .eq("direccion", direccion)
+          .gte("enviado_en", inicio.toISOString());
+        if (error) throw error;
+        return count ?? 0;
+      };
+      const [recibidos, respondidos] = await Promise.all([contar("entrante"), contar("saliente")]);
+      return { recibidos, respondidos };
     },
     refetchInterval: 60_000,
   });

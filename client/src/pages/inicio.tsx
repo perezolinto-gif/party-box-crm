@@ -61,7 +61,7 @@ export default function Inicio() {
   const { perfil } = useAuth();
   const { data: docs, isLoading } = useDocumentos();
   const { data: det } = useDetecciones("pendiente");
-  const { data: recibidosHoy, isLoading: cargandoHoy } = useMensajesHoy();
+  const { data: hoyMsg, isLoading: cargandoHoy } = useMensajesHoy();
   const hoy = hoyISO();
   const en14 = new Date(); en14.setDate(en14.getDate() + 14);
   const lim = en14.toISOString().slice(0, 10);
@@ -74,7 +74,7 @@ export default function Inicio() {
   const fechaLarga = new Date().toLocaleDateString("es-NI", { weekday: "long", day: "numeric", month: "long" });
 
   const cifras = [
-    { label: "Mensajes recibidos hoy", valor: recibidosHoy ?? 0, href: "/clientes", icono: MessageCircle, color: "rojo", cargando: cargandoHoy },
+    { label: "Mensajes recibidos hoy", valor: hoyMsg?.recibidos ?? 0, href: "/clientes", icono: MessageCircle, color: "rojo", cargando: cargandoHoy, detalle: hoyMsg ? `${hoyMsg.recibidos} ${hoyMsg.recibidos === 1 ? "recibido" : "recibidos"} · ${hoyMsg.respondidos} ${hoyMsg.respondidos === 1 ? "respondido" : "respondidos"}` : undefined },
     { label: "Seguimientos pendientes", valor: seguimientos.length, href: "/cotizaciones", icono: CalendarClock, color: "ocre" },
     { label: "Eventos en 14 días", valor: eventos.length, href: "/pedidos", icono: PartyPopper, color: "verde" },
     { label: "Cotizaciones abiertas", valor: cotAbiertas.length, href: "/cotizaciones", icono: FileText, color: "azul" },
@@ -108,6 +108,7 @@ export default function Inicio() {
             <span className="relative grid h-10 w-10 place-items-center rounded-xl bg-white/20"><c.icono className="h-5 w-5" /></span>
             {(isLoading || (c as any).cargando) ? <Skeleton className="mt-3 h-9 w-12 bg-white/30" /> : <p className="relative mt-3 font-display text-[2rem] font-extrabold leading-none tabular-nums">{c.valor}</p>}
             <p className="relative mt-1.5 text-sm font-medium leading-snug text-white/95">{c.label}</p>
+            {(c as any).detalle && <p className="relative mt-2 inline-block rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-semibold tabular-nums" data-testid="text-detalle-mensajes">{(c as any).detalle}</p>}
           </Link>
         ))}
       </div>
