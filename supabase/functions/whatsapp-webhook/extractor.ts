@@ -99,6 +99,14 @@ export function extraerFecha(t: string, ref: Date): string | null {
   if (/\bpasado manana\b/.test(t)) return sumar(2);
   if (/\bmanana\b/.test(t) && !/\bmanana en la\b|\bpor la manana\b|\bde la manana\b/.test(t)) return sumar(1);
   if (/\bhoy\b/.test(t)) return sumar(0);
+  // "el sábado 21": día de la semana + número de día → la próxima fecha con ese día del mes
+  m = t.match(/\b(?:domingo|lunes|martes|miercoles|jueves|viernes|sabado)\s+(\d{1,2})\b(?!\s*(?:am|pm|hrs?|horas|:))/);
+  if (m && +m[1] >= 1 && +m[1] <= 31) {
+    for (let k = 0; k < 3; k++) {
+      const x = new Date(base.getFullYear(), base.getMonth() + k, +m[1]);
+      if (x.getDate() === +m[1] && x >= base) return iso(x.getFullYear(), x.getMonth() + 1, x.getDate());
+    }
+  }
   m = t.match(/\b(?:este|el|para el|proximo|el proximo)\s+(domingo|lunes|martes|miercoles|jueves|viernes|sabado)\b/);
   if (m) {
     const objetivo = DIAS[m[1]];

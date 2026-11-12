@@ -4,12 +4,14 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase, llamarEnvio, type EstadoEnvio } from "@/lib/supabase";
 import { waLink, WA_TARGET } from "@/lib/crm";
 import { useToast } from "@/hooks/use-toast";
+import { AnalisisChat } from "@/components/analisis-chat";
+import { prepararBorrador } from "./documento";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Search, MessageCircle, UserRound, ExternalLink, Check, Camera, ImageOff, Video, FileText, Mic, Download, SendHorizontal, Loader2 } from "lucide-react";
+import { ArrowLeft, Search, MessageCircle, UserRound, ExternalLink, Check, Camera, ImageOff, Video, FileText, Mic, Download, SendHorizontal, Loader2, Sparkles } from "lucide-react";
 
-type Msg = {
+export type Msg = {
   id: string;
   cliente_id: string | null;
   telefono: string | null;
@@ -39,7 +41,7 @@ const REFRESCO = 15_000;
 
 function inicioDeHoy() { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }
 
-function horaCorta(iso: string) {
+export function horaCorta(iso: string) {
   return new Date(iso).toLocaleTimeString("es-NI", { hour: "numeric", minute: "2-digit" });
 }
 function cuandoLista(iso: string) {
@@ -49,7 +51,7 @@ function cuandoLista(iso: string) {
   if (d >= ayer) return "Ayer";
   return d.toLocaleDateString("es-NI", { day: "numeric", month: "short" });
 }
-function etiquetaDia(iso: string) {
+export function etiquetaDia(iso: string) {
   const d = new Date(iso); const hoy = inicioDeHoy();
   const ayer = new Date(hoy); ayer.setDate(ayer.getDate() - 1);
   if (d >= hoy) return "Hoy";
@@ -269,6 +271,8 @@ function Conversacion({ telefono, chat, onVolver }: { telefono: string; chat: Ch
   const nombre = chat?.nombre ?? telBonito(telefono);
   const wa = waLink(telefono);
   const caja = useRef<HTMLTextAreaElement>(null);
+  const [analizar, setAnalizar] = useState(false);
+  const [, navegar] = useLocation();
   const clienteId = chat?.clienteId ?? msgs?.find((m) => m.cliente_id)?.cliente_id ?? null;
 
   const grupos: { dia: string; items: Msg[] }[] = [];
@@ -289,6 +293,11 @@ function Conversacion({ telefono, chat, onVolver }: { telefono: string; chat: Ch
         </div>
         {clienteId && (
           <Button variant="outline" size="sm" asChild className="hidden sm:inline-flex"><Link href={`/clientes/${clienteId}`}><UserRound className="mr-1 h-4 w-4" />Ver cliente</Link></Button>
+        )}
+        <Button size="sm" onClick={() => setAnalizar(true)} className="bg-[hsl(var(--solido-ciruela))] hover:bg-[hsl(var(--solido-ciruela)/.9)] text-white" data-testid="button-analizar-chat"><Sparkles className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">Analizar</span></Button>
+        {analizar && (
+          <AnalisisChat abierto telefono={telefono} nombre={nombre} onCerrar={() => setAnalizar(false)}
+            onCrear={(tipo, a) => { prepararBorrador({ cliente_id: clienteId, mensaje_origen_id: a.mensaje_id, fecha_evento: a.fecha_evento, hora_evento: a.hora_evento, lugar: a.lugar, moneda: a.moneda, notas: a.notas, anticipo: 0, items: a.items.map((i) => ({ producto_id: null, ...i })) }); setAnalizar(false); navegar(`/nuevo/${tipo}`); }} />
         )}
         {wa && (
           <Button size="sm" variant="ghost" asChild data-testid="button-abrir-whatsapp" title="Abrir este chat en WhatsApp"><a href={wa} target={WA_TARGET}><ExternalLink className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">WhatsApp</span></a></Button>
@@ -393,7 +402,7 @@ function Redactor({ telefono, wa, caja, ultimoEntrante }: { telefono: string; wa
   );
 }
 
-function Contenido({ m, url, onCargar }: { m: Msg; url?: string; onCargar?: () => void }) {
+export function Contenido({ m, url, onCargar }: { m: Msg; url?: string; onCargar?: () => void }) {
   const p = partes(m.texto);
   if (!p.clase) return <p className="whitespace-pre-wrap break-words">{m.texto}</p>;
   const pie = p.clase === "documento" && p.texto === m.media_nombre ? "" : p.texto;

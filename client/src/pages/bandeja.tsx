@@ -6,10 +6,11 @@ import { useDetecciones, useInvalidar, dinero, fechaCorta, fechaHora, hoyISO, ty
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Encabezado } from "./inicio";
 import { prepararBorrador } from "./documento";
+import { AnalisisChat, type DatosCotizacion } from "@/components/analisis-chat";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, ShoppingBag, X, MessageCircle, CalendarDays, MapPin, Banknote, Users, Upload, CalendarClock, Undo2 } from "lucide-react";
+import { FileText, ShoppingBag, X, MessageCircle, CalendarDays, MapPin, Banknote, Users, Upload, CalendarClock, Undo2, Sparkles } from "lucide-react";
 
 const PLAZOS: [string, number][] = [["Mañana", 1], ["En 3 días", 3], ["En 1 semana", 7]];
 function enDias(n: number) { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
@@ -20,6 +21,18 @@ export default function Bandeja() {
   const invalidar = useInvalidar();
   const { perfil } = useAuth();
   const [, navegar] = useLocation();
+  const [analizar, setAnalizar] = useState<Deteccion | null>(null);
+
+  function crearDesdeAnalisis(tipo: "cotizacion" | "pedido", a: DatosCotizacion) {
+    const d = analizar!;
+    prepararBorrador({
+      deteccion_id: d.id, cliente_id: d.cliente_id, mensaje_origen_id: a.mensaje_id ?? d.mensaje_id,
+      fecha_evento: a.fecha_evento, hora_evento: a.hora_evento, lugar: a.lugar, moneda: a.moneda, notas: a.notas, anticipo: 0,
+      items: a.items.map((i) => ({ producto_id: null, ...i })),
+    });
+    setAnalizar(null);
+    navegar(`/nuevo/${tipo}`);
+  }
 
   function convertir(d: Deteccion, tipo: "cotizacion" | "pedido") {
     const x = d.datos ?? {};
@@ -99,7 +112,7 @@ export default function Bandeja() {
                 </span>
                 </div>
               </div>
-              <div className="mx-4 mt-3 space-y-1.5" data-testid={`text-mensaje-${d.id}`}>
+              <div className="mx-4 mt-3 space-y-1.5 cursor-pointer" onClick={() => tel && setAnalizar(d)} title="Ver el chat completo" data-testid={`text-mensaje-${d.id}`}>
                 {(x.textos?.length ? x.textos.slice(-5) : [{ texto: d.mensajes?.texto, en: d.mensajes?.enviado_en }]).map((m: any, i: number) => (
                   <p key={i} className="whitespace-pre-wrap break-words rounded-lg bg-muted px-3 py-2 text-sm">{m.texto}{x.textos?.length > 1 && m.en && <span className="ml-2 text-xs text-muted-foreground">{fechaHora(m.en)}</span>}</p>
                 ))}
@@ -113,6 +126,7 @@ export default function Bandeja() {
                 {x.invitados && <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" />{x.invitados} invitados</span>}
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2 border-t px-4 py-3">
+                {tel && <Button size="sm" onClick={() => setAnalizar(d)} className="bg-[hsl(var(--solido-ciruela))] hover:bg-[hsl(var(--solido-ciruela)/.9)] text-white" data-testid={`button-analizar-${d.id}`}><Sparkles className="h-4 w-4 mr-1" />Ver chat y analizar</Button>}
                 {(estado === "pendiente" || estado === "seguimiento") && <>
                   <Button size="sm" variant={d.tipo_sugerido === "cotizacion" ? "default" : "outline"} onClick={() => convertir(d, "cotizacion")} data-testid={`button-a-cotizacion-${d.id}`}><FileText className="h-4 w-4 mr-1" />Crear cotización</Button>
                   <Button size="sm" variant={d.tipo_sugerido === "pedido" ? "default" : "outline"} onClick={() => convertir(d, "pedido")} data-testid={`button-a-pedido-${d.id}`}><ShoppingBag className="h-4 w-4 mr-1" />Crear pedido</Button>
@@ -136,6 +150,15 @@ export default function Bandeja() {
           );
         })}
       </div>
+      {analizar && (
+        <AnalisisChat
+          abierto
+          telefono={(analizar.clientes?.telefono ?? analizar.mensajes?.telefono ?? "").replace(/\D/g, "")}
+          nombre={analizar.clientes?.nombre ?? analizar.mensajes?.nombre_contacto ?? "Cliente"}
+          onCerrar={() => setAnalizar(null)}
+          onCrear={crearDesdeAnalisis}
+        />
+      )}
       {estado === "pendiente" && !!data?.length && (
         <p className="mt-6 text-xs text-muted-foreground flex items-center gap-1.5"><Upload className="h-3.5 w-3.5" />¿Falta algún chat? <Link href="/importar" className="text-primary hover:underline">Impórtalo aquí</Link>.</p>
       )}
