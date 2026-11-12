@@ -74,7 +74,7 @@ export default function Inicio() {
   const fechaLarga = new Date().toLocaleDateString("es-NI", { weekday: "long", day: "numeric", month: "long" });
 
   const cifras = [
-    { label: "Mensajes recibidos hoy", valor: hoyMsg?.recibidos ?? 0, href: "/clientes", icono: MessageCircle, color: "rojo", cargando: cargandoHoy, detalle: hoyMsg ? `${hoyMsg.recibidos} ${hoyMsg.recibidos === 1 ? "recibido" : "recibidos"} · ${hoyMsg.respondidos} ${hoyMsg.respondidos === 1 ? "respondido" : "respondidos"}` : undefined },
+    { label: "Mensajes recibidos hoy", valor: hoyMsg?.recibidos ?? 0, href: "/mensajes", icono: MessageCircle, color: "rojo", cargando: cargandoHoy, detalle: hoyMsg ? `${hoyMsg.recibidos} ${hoyMsg.recibidos === 1 ? "recibido" : "recibidos"} · ${hoyMsg.respondidos} ${hoyMsg.respondidos === 1 ? "respondido" : "respondidos"}` : undefined },
     { label: "Seguimientos pendientes", valor: seguimientos.length, href: "/cotizaciones", icono: CalendarClock, color: "ocre" },
     { label: "Eventos en 14 días", valor: eventos.length, href: "/pedidos", icono: PartyPopper, color: "verde" },
     { label: "Cotizaciones abiertas", valor: cotAbiertas.length, href: "/cotizaciones", icono: FileText, color: "azul" },

@@ -14,14 +14,16 @@ import Documentos from "@/pages/documentos";
 import DocumentoEditor from "@/pages/documento";
 import Clientes, { ClienteDetalle } from "@/pages/clientes";
 import Importar from "@/pages/importar";
+import Mensajes from "@/pages/mensajes";
 import { Catalogo, Equipo, WhatsappConfig } from "@/pages/admin";
 import NotFound from "@/pages/not-found";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
-import { Home, Inbox, FileText, ShoppingBag, Users, Upload, Package, UserCog, MessageCircle, LogOut, Menu, Loader2 } from "lucide-react";
+import { Home, Inbox, FileText, ShoppingBag, Users, Upload, Package, UserCog, MessageCircle, MessagesSquare, LogOut, Menu, Loader2 } from "lucide-react";
 
 const NAV = [
   { href: "/", label: "Hoy", icon: Home },
+  { href: "/mensajes", label: "Mensajes", icon: MessagesSquare },
   { href: "/bandeja", label: "Bandeja WhatsApp", icon: Inbox, badge: true },
   { href: "/cotizaciones", label: "Cotizaciones", icon: FileText },
   { href: "/pedidos", label: "Pedidos", icon: ShoppingBag },
@@ -123,6 +125,8 @@ function Rutas() {
     <Shell>
       <Switch>
         <Route path="/" component={Inicio} />
+        <Route path="/mensajes">{() => <Mensajes />}</Route>
+        <Route path="/mensajes/:tel">{(p) => <Mensajes telefono={p.tel} />}</Route>
         <Route path="/bandeja" component={Bandeja} />
         <Route path="/cotizaciones">{() => <Documentos tipo="cotizacion" />}</Route>
         <Route path="/pedidos">{() => <Documentos tipo="pedido" />}</Route>
