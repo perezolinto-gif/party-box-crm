@@ -141,6 +141,24 @@ export function useClientes() {
   });
 }
 
+/** Total de mensajes entrantes de WhatsApp desde la medianoche (hora del dispositivo). */
+export function useMensajesHoy() {
+  return useQuery({
+    queryKey: ["mensajes", "hoy"],
+    queryFn: async () => {
+      const inicio = new Date(); inicio.setHours(0, 0, 0, 0);
+      const { count, error } = await supabase
+        .from("mensajes")
+        .select("id", { count: "exact", head: true })
+        .eq("direccion", "entrante")
+        .gte("enviado_en", inicio.toISOString());
+      if (error) throw error;
+      return count ?? 0;
+    },
+    refetchInterval: 60_000,
+  });
+}
+
 export function useDetecciones(estado = "pendiente") {
   return useQuery({
     queryKey: ["detecciones", estado],

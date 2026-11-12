@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { useDocumentos, useDetecciones, ESTADOS_CERRADOS, hoyISO, fechaCorta, dinero, etiquetaEstado, tonoEstado, type Documento } from "@/lib/crm";
+import { useDocumentos, useDetecciones, useMensajesHoy, ESTADOS_CERRADOS, hoyISO, fechaCorta, dinero, etiquetaEstado, tonoEstado, type Documento } from "@/lib/crm";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -61,6 +61,7 @@ export default function Inicio() {
   const { perfil } = useAuth();
   const { data: docs, isLoading } = useDocumentos();
   const { data: det } = useDetecciones("pendiente");
+  const { data: recibidosHoy, isLoading: cargandoHoy } = useMensajesHoy();
   const hoy = hoyISO();
   const en14 = new Date(); en14.setDate(en14.getDate() + 14);
   const lim = en14.toISOString().slice(0, 10);
@@ -73,7 +74,7 @@ export default function Inicio() {
   const fechaLarga = new Date().toLocaleDateString("es-NI", { weekday: "long", day: "numeric", month: "long" });
 
   const cifras = [
-    { label: "Mensajes recibidos", valor: det?.length ?? 0, href: "/bandeja", icono: MessageCircle, color: "rojo" },
+    { label: "Mensajes recibidos hoy", valor: recibidosHoy ?? 0, href: "/clientes", icono: MessageCircle, color: "rojo", cargando: cargandoHoy },
     { label: "Seguimientos pendientes", valor: seguimientos.length, href: "/cotizaciones", icono: CalendarClock, color: "ocre" },
     { label: "Eventos en 14 días", valor: eventos.length, href: "/pedidos", icono: PartyPopper, color: "verde" },
     { label: "Cotizaciones abiertas", valor: cotAbiertas.length, href: "/cotizaciones", icono: FileText, color: "azul" },
@@ -105,7 +106,7 @@ export default function Inicio() {
           <Link key={c.label} href={c.href} className="group relative overflow-hidden rounded-2xl p-4 sm:p-5 text-white shadow-[0_6px_18px_-8px_rgba(0,0,0,.35)] transition-transform hover:-translate-y-0.5" style={{ background: `hsl(var(--solido-${c.color}))` }} data-testid={`stat-${c.label}`}>
             <span className="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-white/10" aria-hidden />
             <span className="relative grid h-10 w-10 place-items-center rounded-xl bg-white/20"><c.icono className="h-5 w-5" /></span>
-            {isLoading ? <Skeleton className="mt-3 h-9 w-12 bg-white/30" /> : <p className="relative mt-3 font-display text-[2rem] font-extrabold leading-none tabular-nums">{c.valor}</p>}
+            {(isLoading || (c as any).cargando) ? <Skeleton className="mt-3 h-9 w-12 bg-white/30" /> : <p className="relative mt-3 font-display text-[2rem] font-extrabold leading-none tabular-nums">{c.valor}</p>}
             <p className="relative mt-1.5 text-sm font-medium leading-snug text-white/95">{c.label}</p>
           </Link>
         ))}
