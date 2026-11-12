@@ -114,9 +114,34 @@ async function guardar(opts: { waId: string; telefono: string; nombre: string | 
   if (opts.direccion !== "entrante") return;
   if (opts.historial && Date.now() - opts.ts * 1000 > DIAS_HISTORIAL * 86400000) return;
   const ex = extraer(opts.texto, await productos(), new Date(opts.ts * 1000));
-  if (ex.tipo && ex.confianza >= UMBRAL_DETECCION) {
-    await sb.from("detecciones").insert({ mensaje_id: msg.id, cliente_id: cid, tipo_sugerido: ex.tipo, confianza: ex.confianza, datos: ex });
+  if (ex.tipo && ex.confianza >= UMBRAL_DETECCION) await registrarDeteccion(msg.id, cid, ex, opts.texto, new Date(opts.ts * 1000).toISOString());
+}
+
+// Un solo recuadro "por revisar" por cliente: los mensajes siguientes se suman al mismo.
+async function registrarDeteccion(mensajeId: string, cid: string | null, ex: any, texto: string, en: string) {
+  const previa = cid
+    ? (await sb.from("detecciones").select("id, tipo_sugerido, confianza, datos").eq("cliente_id", cid).eq("estado", "pendiente").order("creado_en", { ascending: false }).limit(1).maybeSingle()).data
+    : null;
+  if (!previa) {
+    await sb.from("detecciones").insert({ mensaje_id: mensajeId, cliente_id: cid, tipo_sugerido: ex.tipo, confianza: ex.confianza, datos: { ...ex, textos: [{ texto, en }] }, actualizado_en: en });
+    return;
   }
+  const d = previa.datos ?? {};
+  const textos = [...(d.textos ?? []), { texto, en }].slice(-12);
+  const datos = {
+    ...d, textos,
+    items: [...(d.items ?? []), ...(ex.items ?? [])],
+    montos: [...(d.montos ?? []), ...(ex.montos ?? [])],
+    fecha_evento: d.fecha_evento ?? ex.fecha_evento, hora_evento: d.hora_evento ?? ex.hora_evento,
+    lugar: d.lugar ?? ex.lugar, invitados: d.invitados ?? ex.invitados,
+    razones: Array.from(new Set([...(d.razones ?? []), ...(ex.razones ?? [])])).slice(0, 8),
+  };
+  await sb.from("detecciones").update({
+    mensaje_id: mensajeId,
+    tipo_sugerido: previa.tipo_sugerido === "pedido" || ex.tipo === "pedido" ? "pedido" : "cotizacion",
+    confianza: Math.max(previa.confianza ?? 0, ex.confianza),
+    datos, actualizado_en: en,
+  }).eq("id", previa.id);
 }
 
 // ---------- YCloud (proveedor oficial de Meta, coexistencia con la app WhatsApp Business) ----------

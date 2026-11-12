@@ -171,7 +171,7 @@ export function useDetecciones(estado = "pendiente") {
         .from("detecciones")
         .select("*, mensajes(*), clientes(id,nombre,telefono)")
         .eq("estado", estado)
-        .order("creado_en", { ascending: false })
+        .order("actualizado_en", { ascending: false })
         .limit(200);
       if (error) throw error;
       return data as Deteccion[];

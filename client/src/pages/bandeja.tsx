@@ -83,7 +83,12 @@ export default function Bandeja() {
                   {d.tipo_sugerido === "pedido" ? "Posible pedido" : "Posible cotización"} · {d.confianza}%
                 </span>
               </div>
-              <p className="mx-4 mt-3 whitespace-pre-wrap break-words rounded-lg bg-muted px-3 py-2 text-sm" data-testid={`text-mensaje-${d.id}`}>{d.mensajes?.texto}</p>
+              <div className="mx-4 mt-3 space-y-1.5" data-testid={`text-mensaje-${d.id}`}>
+                {(x.textos?.length ? x.textos.slice(-5) : [{ texto: d.mensajes?.texto, en: d.mensajes?.enviado_en }]).map((m: any, i: number) => (
+                  <p key={i} className="whitespace-pre-wrap break-words rounded-lg bg-muted px-3 py-2 text-sm">{m.texto}{x.textos?.length > 1 && m.en && <span className="ml-2 text-xs text-muted-foreground">{fechaHora(m.en)}</span>}</p>
+                ))}
+                {x.textos?.length > 5 && <p className="text-xs text-muted-foreground">y {x.textos.length - 5} mensajes anteriores</p>}
+              </div>
               <div className="flex flex-wrap gap-x-4 gap-y-1.5 px-4 pt-3 text-xs text-muted-foreground">
                 {x.items?.length > 0 && <span className="text-foreground">{x.items.map((i: any) => `${i.cantidad} × ${i.descripcion}`).join(", ")}</span>}
                 {x.fecha_evento && <span className="flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" />{fechaCorta(x.fecha_evento)}{x.hora_evento ? ` · ${x.hora_evento}` : ""}</span>}

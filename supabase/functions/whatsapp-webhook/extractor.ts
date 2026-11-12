@@ -231,7 +231,8 @@ export function extraer(texto: string, productos: ProductoRef[] = [], ref: Date 
   return { tipo, confianza, items, montos, fecha_evento, hora_evento, lugar, invitados, razones: Array.from(new Set(razones)).slice(0, 8) };
 }
 
-export const UMBRAL_DETECCION = 35;
+// Los clientes escriben en frases cortas por WhatsApp: basta una palabra clara de precio, disponibilidad o pedido.
+export const UMBRAL_DETECCION = 14;
 
 // ---- Importación de chats exportados desde WhatsApp ("Exportar chat" → sin archivos) ----
 export type LineaChat = { fecha: Date; autor: string; texto: string };
