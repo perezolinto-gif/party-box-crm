@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase, llamarCuentas, WEBHOOK_URL } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
@@ -11,7 +11,144 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Copy, KeyRound, CheckCircle2, CircleDashed, Save } from "lucide-react";
+import { Plus, Pencil, Trash2, Copy, KeyRound, CheckCircle2, CircleDashed, Save, UploadCloud, FileText, Image as ImageIcon, FileSpreadsheet, Loader2, ExternalLink } from "lucide-react";
+
+// ---------------- Archivos de catálogo (proveedores, inventario, precios) ----------------
+type ArchivoCatalogo = { id: string; nombre: string; ruta: string; tipo: "proveedor" | "inventario" | "precios"; proveedor: string | null; mime: string | null; bytes: number | null; estado: string; creado_en: string };
+const TIPOS_ARCHIVO: { valor: ArchivoCatalogo["tipo"]; etiqueta: string }[] = [
+  { valor: "proveedor", etiqueta: "Catálogo de proveedor" },
+  { valor: "inventario", etiqueta: "Lista de inventario" },
+  { valor: "precios", etiqueta: "Lista de precios" },
+];
+const ACEPTA = ".pdf,.jpg,.jpeg,.png,.webp,.heic,.xlsx,.xls,.csv";
+const MAX_MB = 100;
+function tamano(b: number | null) { if (!b) return ""; return b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`; }
+function mimeDe(f: File) {
+  if (f.type) return f.type;
+  const ext = f.name.split(".").pop()?.toLowerCase();
+  return ({ pdf: "application/pdf", jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", heic: "image/heic", csv: "text/csv", xls: "application/vnd.ms-excel", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" } as Record<string, string>)[ext ?? ""] ?? "application/octet-stream";
+}
+
+function ArchivosCatalogo() {
+  const { perfil } = useAuth();
+  const { toast } = useToast();
+  const [tipo, setTipo] = useState<ArchivoCatalogo["tipo"]>("proveedor");
+  const [proveedor, setProveedor] = useState("");
+  const [arrastrando, setArrastrando] = useState(false);
+  const [subiendo, setSubiendo] = useState<{ hechos: number; total: number } | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const q = useQuery({
+    queryKey: ["archivos_catalogo"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("archivos_catalogo").select("*").order("creado_en", { ascending: false });
+      if (error) throw error;
+      return data as ArchivoCatalogo[];
+    },
+  });
+
+  async function subir(lista: FileList | File[]) {
+    const archivos = Array.from(lista);
+    const validos = archivos.filter((f) => f.size <= MAX_MB * 1048576 && /\.(pdf|jpe?g|png|webp|heic|xlsx?|csv)$/i.test(f.name));
+    const rechazados = archivos.length - validos.length;
+    if (rechazados) toast({ title: `${rechazados} ${rechazados === 1 ? "archivo no se subió" : "archivos no se subieron"}`, description: `Solo PDF, imágenes (JPG, PNG), Excel o CSV de hasta ${MAX_MB} MB.`, variant: "destructive" });
+    if (!validos.length) return;
+    setSubiendo({ hechos: 0, total: validos.length });
+    let ok = 0;
+    for (const f of validos) {
+      const limpio = f.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w.\-]+/g, "-").slice(-80);
+      const ruta = `${tipo}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${limpio}`;
+      const mime = mimeDe(f);
+      const { error } = await supabase.storage.from("catalogos").upload(ruta, f, { contentType: mime, upsert: false });
+      if (!error) {
+        const { error: e2 } = await supabase.from("archivos_catalogo").insert({ nombre: f.name, ruta, tipo, proveedor: tipo === "proveedor" ? proveedor.trim() || null : null, mime, bytes: f.size, subido_por: perfil?.id });
+        if (!e2) ok++; else await supabase.storage.from("catalogos").remove([ruta]);
+      } else toast({ title: `No se pudo subir ${f.name}`, description: error.message, variant: "destructive" });
+      setSubiendo((s) => s && { ...s, hechos: s.hechos + 1 });
+    }
+    setSubiendo(null);
+    if (ok) toast({ title: ok === 1 ? "Archivo subido" : `${ok} archivos subidos` });
+    q.refetch();
+  }
+
+  async function abrir(a: ArchivoCatalogo) {
+    const w = window.open("", "_blank");
+    const { data } = await supabase.storage.from("catalogos").createSignedUrl(a.ruta, 3600);
+    if (data?.signedUrl && w) w.location.href = data.signedUrl; else w?.close();
+  }
+  async function borrar(a: ArchivoCatalogo) {
+    if (!confirm(`¿Borrar «${a.nombre}»?`)) return;
+    await supabase.storage.from("catalogos").remove([a.ruta]);
+    await supabase.from("archivos_catalogo").delete().eq("id", a.id);
+    q.refetch();
+  }
+
+  const icono = (m: string | null) => m?.startsWith("image/") ? ImageIcon : /sheet|excel|csv/.test(m ?? "") ? FileSpreadsheet : FileText;
+
+  return (
+    <section className="tarjeta mb-6 overflow-hidden" data-testid="section-archivos-catalogo">
+      <div className="border-b px-4 py-3 sm:px-5">
+        <h2 className="text-base font-bold">Catálogos y listas de precios</h2>
+        <p className="text-sm text-muted-foreground">Sube los catálogos de proveedores, la lista de inventario y las listas de precios. Con estos archivos se carga el catálogo de productos.</p>
+      </div>
+      <div className="grid gap-3 px-4 pt-4 sm:grid-cols-2 sm:px-5">
+        <div className="space-y-1.5">
+          <Label>Tipo de archivo</Label>
+          <Select value={tipo} onValueChange={(v) => setTipo(v as any)}>
+            <SelectTrigger data-testid="select-tipo-archivo"><SelectValue /></SelectTrigger>
+            <SelectContent>{TIPOS_ARCHIVO.map((t) => <SelectItem key={t.valor} value={t.valor}>{t.etiqueta}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        {tipo === "proveedor" && (
+          <div className="space-y-1.5">
+            <Label htmlFor="proveedor">Proveedor (opcional)</Label>
+            <Input id="proveedor" placeholder="Nombre del proveedor" value={proveedor} onChange={(e) => setProveedor(e.target.value)} data-testid="input-proveedor" />
+          </div>
+        )}
+      </div>
+      <div
+        role="button" tabIndex={0}
+        onClick={() => !subiendo && input.current?.click()}
+        onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !subiendo) { e.preventDefault(); input.current?.click(); } }}
+        onDragOver={(e) => { e.preventDefault(); setArrastrando(true); }}
+        onDragLeave={() => setArrastrando(false)}
+        onDrop={(e) => { e.preventDefault(); setArrastrando(false); if (!subiendo && e.dataTransfer.files?.length) subir(e.dataTransfer.files); }}
+        className={`m-4 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-8 text-center transition-colors sm:mx-5 ${arrastrando ? "border-[hsl(var(--solido-rojo))] bg-[hsl(var(--marca-rojo)/.06)]" : "border-border hover:bg-muted/50"}`}
+        data-testid="zona-subir"
+      >
+        {subiendo ? (
+          <><Loader2 className="h-8 w-8 animate-spin text-[hsl(var(--solido-rojo))]" /><p className="mt-2 text-sm font-medium">Subiendo {subiendo.hechos + 1 > subiendo.total ? subiendo.total : subiendo.hechos + 1} de {subiendo.total}…</p></>
+        ) : (
+          <>
+            <UploadCloud className="h-9 w-9 text-[hsl(var(--solido-rojo))]" />
+            <p className="mt-2 text-sm font-semibold">Arrastra los archivos aquí</p>
+            <p className="text-sm text-muted-foreground">o toca para elegirlos o tomar una foto</p>
+            <p className="mt-2 text-xs text-muted-foreground">PDF, JPG, PNG, Excel o CSV · hasta {MAX_MB} MB cada uno · puedes subir varios a la vez</p>
+          </>
+        )}
+        <input ref={input} type="file" multiple accept={ACEPTA} className="hidden" onChange={(e) => { if (e.target.files?.length) subir(e.target.files); e.target.value = ""; }} data-testid="input-archivos" />
+      </div>
+      {!!q.data?.length && (
+        <ul className="divide-y border-t">
+          {q.data.map((a) => {
+            const Ico = icono(a.mime);
+            return (
+              <li key={a.id} className="flex items-center gap-3 px-4 py-3 sm:px-5" data-testid={`row-archivo-${a.id}`}>
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-muted"><Ico className="h-4 w-4" /></span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{a.nombre}</p>
+                  <p className="truncate text-xs text-muted-foreground">{TIPOS_ARCHIVO.find((t) => t.valor === a.tipo)?.etiqueta}{a.proveedor ? ` · ${a.proveedor}` : ""} · {tamano(a.bytes)} · {fechaHora(a.creado_en)}</p>
+                </div>
+                <span className={`hidden sm:inline rounded-full px-2.5 py-0.5 text-xs font-medium text-white ${a.estado === "procesado" ? "bg-[hsl(var(--solido-verde))]" : "bg-[hsl(var(--solido-ocre))]"}`}>{a.estado === "procesado" ? "Cargado al catálogo" : "Por cargar"}</span>
+                <Button variant="ghost" size="icon" aria-label="Abrir" onClick={() => abrir(a)}><ExternalLink className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="icon" aria-label="Borrar" onClick={() => borrar(a)} data-testid={`button-borrar-archivo-${a.id}`}><Trash2 className="h-4 w-4" /></Button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
 
 // ---------------- Catálogo ----------------
 export function Catalogo() {
@@ -34,6 +171,7 @@ export function Catalogo() {
     <div>
       <Encabezado titulo="Catálogo" sub="Productos y servicios con su precio. Las palabras clave ayudan a reconocerlos en los mensajes de WhatsApp."
         acciones={<Button onClick={() => setEditando({ moneda: "NIO", activo: true })} data-testid="button-nuevo-producto"><Plus className="h-4 w-4 mr-1" />Producto</Button>} />
+      <ArchivosCatalogo />
       {!isLoading && !data?.length && (
         <div className="rounded-xl border border-dashed bg-card px-6 py-10 text-center text-sm text-muted-foreground">
           Agrega los productos de Party Box (cajas, decoraciones, alquileres…) para que se reconozcan en los chats y se llenen los precios solos.

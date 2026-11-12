@@ -8,6 +8,7 @@ import {
   type Documento, type Item, type Seguimiento, type Cliente, type Mensaje,
 } from "@/lib/crm";
 import { normalizarTelefono } from "@shared/extractor";
+import { pdfDocumento, compartirODescargar } from "@/lib/pdf";
 import { Encabezado, EstadoPill } from "./inicio";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Save, Send, Copy, ArrowLeft, Repeat, MessageSquare, Phone, StickyNote, Loader2, Search, UserPlus } from "lucide-react";
+import { Plus, Trash2, Save, Send, Copy, ArrowLeft, Repeat, MessageSquare, Phone, StickyNote, Loader2, Search, UserPlus, FileDown, Share2 } from "lucide-react";
 
 // Borrador compartido entre la Bandeja y el editor (sin almacenamiento del navegador)
 export type Borrador = { cliente_id?: string | null; mensaje_origen_id?: string | null; deteccion_id?: string; fecha_evento?: string | null; hora_evento?: string | null; lugar?: string | null; moneda?: "NIO" | "USD"; notas?: string; items?: Item[]; anticipo?: number; convertido_de?: string | null };
@@ -51,6 +52,7 @@ export default function DocumentoEditor({ id, nuevoTipo }: { id?: string; nuevoT
     },
   });
 
+  const [generando, setGenerando] = useState(false);
   const [tipo, setTipo] = useState<"cotizacion" | "pedido">(nuevoTipo ?? "cotizacion");
   const [f, setF] = useState<Partial<Documento>>({ estado: "nuevo", moneda: "NIO", anticipo: 0 });
   const [items, setItems] = useState<Item[]>([{ ...VACIO_ITEM }]);
@@ -140,6 +142,17 @@ export default function DocumentoEditor({ id, nuevoTipo }: { id?: string; nuevoT
   const cliente = clientes?.find((c) => c.id === f.cliente_id) ?? doc?.clientes ?? null;
   const textoWa = doc ? textoDocumento({ ...(doc as Documento), ...(f as Documento), total }, items.filter((i) => i.descripcion.trim()), cliente) : "";
   const linkWa = waLink(cliente?.telefono, textoWa);
+  async function enviarPdf() {
+    if (!doc) return;
+    setGenerando(true);
+    try {
+      const archivo = await pdfDocumento({ ...(doc as Documento), ...(f as Documento), total }, items.filter((i) => i.descripcion.trim()), cliente);
+      const r = await compartirODescargar(archivo);
+      if (r === "descargado") toast({ title: "PDF descargado", description: "Adjúntalo en el chat de WhatsApp del cliente." });
+    } catch (e: any) {
+      toast({ title: "No se pudo crear el PDF", description: e?.message, variant: "destructive" });
+    } finally { setGenerando(false); }
+  }
   const titulo = esNuevo ? (tipo === "cotizacion" ? "Nueva cotización" : "Nuevo pedido") : `${tipo === "cotizacion" ? "Cotización" : "Pedido"} ${doc?.numero}`;
 
   return (
@@ -232,8 +245,12 @@ export default function DocumentoEditor({ id, nuevoTipo }: { id?: string; nuevoT
             </Campo>
             {doc && (
               <div className="grid gap-2 pt-1">
+                <Button onClick={enviarPdf} disabled={generando} data-testid="button-pdf">
+                  {generando ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ? <Share2 className="h-4 w-4 mr-1" /> : <FileDown className="h-4 w-4 mr-1" />}
+                  {/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ? "Compartir PDF" : "Descargar PDF"}
+                </Button>
                 <Button variant="outline" asChild disabled={!linkWa} data-testid="button-enviar-wa">
-                  {linkWa ? <a href={linkWa} target="_blank" rel="noopener noreferrer"><Send className="h-4 w-4 mr-1" />Enviar por WhatsApp</a> : <span><Send className="h-4 w-4 mr-1" />Cliente sin teléfono</span>}
+                  {linkWa ? <a href={linkWa} target="_blank" rel="noopener noreferrer"><Send className="h-4 w-4 mr-1" />Enviar como texto</a> : <span><Send className="h-4 w-4 mr-1" />Cliente sin teléfono</span>}
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => { navigator.clipboard?.writeText(textoWa); toast({ title: "Texto copiado" }); }} data-testid="button-copiar"><Copy className="h-4 w-4 mr-1" />Copiar texto</Button>
               </div>
