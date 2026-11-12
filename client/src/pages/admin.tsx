@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase, llamarCuentas, WEBHOOK_URL } from "@/lib/supabase";
+import { supabase, llamarCuentas, llamarEnvio, WEBHOOK_URL } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { useProductos, usePerfiles, useInvalidar, dinero, fechaHora, type Producto } from "@/lib/crm";
 import { Encabezado } from "./inicio";
@@ -331,6 +331,10 @@ export function WhatsappConfig() {
   });
   const [secreto, setSecreto] = useState("");
   const [ycSecreto, setYcSecreto] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const envio = useQuery({ queryKey: ["envio-estado", "admin"], queryFn: () => llamarEnvio({ accion: "estado" }), refetchInterval: 60000 });
+  const [limite, setLimite] = useState("");
+  useEffect(() => { if (envio.data) setLimite(String(envio.data.limite)); }, [envio.data?.limite]);
   const [numero, setNumero] = useState("");
   useEffect(() => { if (cfg.data?.numero_mostrado) setNumero(cfg.data.numero_mostrado); }, [cfg.data?.numero_mostrado]);
 
@@ -338,7 +342,7 @@ export function WhatsappConfig() {
   async function guardar(patch: Record<string, unknown>) {
     const { error } = await supabase.from("config_whatsapp").update(patch).eq("id", 1);
     if (error) return toast({ title: "Error", description: error.message, variant: "destructive" });
-    setSecreto(""); setYcSecreto(""); cfg.refetch(); toast({ title: "Guardado" });
+    setSecreto(""); setYcSecreto(""); setApiKey(""); cfg.refetch(); envio.refetch(); toast({ title: "Guardado" });
   }
   const conectado = !!cfg.data?.ultimo_evento;
 
@@ -372,6 +376,38 @@ export function WhatsappConfig() {
             </Select>
           </div>
         </div>
+      </section>
+
+      <section className="mb-5 tarjeta p-4 sm:p-5 text-sm space-y-4" data-testid="section-envio">
+        <div className="flex items-start gap-3">
+          {envio.data?.configurado ? <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" /> : <CircleDashed className="h-5 w-5 text-muted-foreground shrink-0" />}
+          <div>
+            <h2 className="text-base font-bold">Responder y enviar cotizaciones desde el CRM</h2>
+            <p className="mt-1 text-muted-foreground">Con la clave de API de YCloud el equipo escribe y manda los PDF desde el CRM, sin abrir WhatsApp. Solo funciona dentro de las 24 horas desde el último mensaje del cliente (regla de WhatsApp). Esos mensajes salen del número de Party Box y también se ven en el teléfono.</p>
+            <p className="mt-2" data-testid="text-envio-estado">{envio.data ? (envio.data.configurado ? <>Conectado · <b>{envio.data.usados}</b> de {envio.data.limite} mensajes usados este mes</> : "Aún sin clave de API.") : "—"}</p>
+          </div>
+        </div>
+        <ol className="list-decimal space-y-1 pl-5 text-muted-foreground">
+          <li>En YCloud: <b>Developers › API Keys</b>, copia la clave (o crea una).</li>
+          <li>Pégala abajo y guarda. No se muestra después de guardarla.</li>
+        </ol>
+        <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Clave de API de YCloud {envio.data?.configurado && <span className="text-emerald-700">(configurada)</span>}</Label>
+            <div className="flex gap-2">
+              <Input type="password" autoComplete="off" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={envio.data?.configurado ? "•••••••• (pega una nueva para cambiarla)" : "Pega aquí la clave"} data-testid="input-ycloud-api-key" />
+              <Button onClick={() => guardar({ ycloud_api_key: apiKey.trim() })} disabled={apiKey.trim().length < 10} data-testid="button-guardar-api-key">Guardar</Button>
+            </div>
+          </div>
+          <div className="space-y-1.5 sm:w-44">
+            <Label className="text-xs text-muted-foreground">Tope de mensajes al mes</Label>
+            <div className="flex gap-2">
+              <Input type="number" min={0} max={100000} value={limite} onChange={(e) => setLimite(e.target.value)} data-testid="input-limite-envios" />
+              <Button variant="outline" onClick={() => guardar({ envios_limite_mes: Math.max(0, Math.min(100000, Number(limite) || 0)) })} disabled={!limite || Number(limite) === envio.data?.limite} data-testid="button-guardar-limite">OK</Button>
+            </div>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">Meta da 1.000 mensajes de servicio gratis al mes; el tope de 950 deja margen para no pagar. Al llegar al tope, el CRM deja de enviar y se responde desde el teléfono.</p>
       </section>
 
       <section className="mb-5 tarjeta p-4 sm:p-5 text-sm space-y-4">

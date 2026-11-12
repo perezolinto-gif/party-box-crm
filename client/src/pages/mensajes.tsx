@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
-import { waLink } from "@/lib/crm";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase, llamarEnvio, type EstadoEnvio } from "@/lib/supabase";
+import { waLink, WA_TARGET } from "@/lib/crm";
+import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Search, MessageCircle, UserRound, ExternalLink, Check, Camera, ImageOff, Video, FileText, Mic, Download } from "lucide-react";
+import { ArrowLeft, Search, MessageCircle, UserRound, ExternalLink, Check, Camera, ImageOff, Video, FileText, Mic, Download, SendHorizontal, Loader2 } from "lucide-react";
 
 type Msg = {
   id: string;
@@ -267,6 +268,7 @@ function Conversacion({ telefono, chat, onVolver }: { telefono: string; chat: Ch
 
   const nombre = chat?.nombre ?? telBonito(telefono);
   const wa = waLink(telefono);
+  const caja = useRef<HTMLTextAreaElement>(null);
   const clienteId = chat?.clienteId ?? msgs?.find((m) => m.cliente_id)?.cliente_id ?? null;
 
   const grupos: { dia: string; items: Msg[] }[] = [];
@@ -289,7 +291,7 @@ function Conversacion({ telefono, chat, onVolver }: { telefono: string; chat: Ch
           <Button variant="outline" size="sm" asChild className="hidden sm:inline-flex"><Link href={`/clientes/${clienteId}`}><UserRound className="mr-1 h-4 w-4" />Ver cliente</Link></Button>
         )}
         {wa && (
-          <Button size="sm" asChild data-testid="button-responder"><a href={wa} target="_blank" rel="noreferrer"><ExternalLink className="mr-1 h-4 w-4" />Responder</a></Button>
+          <Button size="sm" variant="ghost" asChild data-testid="button-abrir-whatsapp" title="Abrir este chat en WhatsApp"><a href={wa} target={WA_TARGET}><ExternalLink className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">WhatsApp</span></a></Button>
         )}
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto bg-[hsl(36_30%_95%)] px-3 py-4 sm:px-6" data-testid="list-conversacion">
@@ -311,10 +313,83 @@ function Conversacion({ telefono, chat, onVolver }: { telefono: string; chat: Ch
         ))}
         <div ref={fin} />
       </div>
-      <footer className="border-t bg-card px-4 py-2.5 text-center text-xs text-muted-foreground">
-        Se responde desde WhatsApp Business en el teléfono; la respuesta aparece aquí sola en unos segundos.
-      </footer>
+      <Redactor telefono={telefono} wa={wa} caja={caja} ultimoEntrante={[...(msgs ?? [])].reverse().find((m) => m.direccion === "entrante")?.enviado_en} />
     </>
+  );
+}
+
+// Cuadro para responder desde el CRM. Solo se habilita dentro de las 24 h que da WhatsApp
+// después del último mensaje del cliente, y respeta el tope mensual de mensajes gratis.
+function Redactor({ telefono, wa, caja, ultimoEntrante }: { telefono: string; wa: string | null; caja: React.RefObject<HTMLTextAreaElement>; ultimoEntrante?: string }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [texto, setTexto] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const est = useQuery<EstadoEnvio>({
+    queryKey: ["envio-estado", telefono, ultimoEntrante],
+    queryFn: () => llamarEnvio({ accion: "estado", telefono }),
+    staleTime: 60_000,
+  });
+  useEffect(() => { setTexto(""); }, [telefono]);
+  const e = est.data;
+  const abierta = !!e?.ventanaHasta && Date.parse(e.ventanaHasta) > Date.now();
+  const sinCupo = !!e && e.usados >= e.limite;
+  const puede = !!e?.configurado && abierta && !sinCupo;
+
+  async function enviar() {
+    const t = texto.trim();
+    if (!t || !puede || enviando) return;
+    setEnviando(true);
+    try {
+      await llamarEnvio({ accion: "texto", telefono, texto: t });
+      setTexto("");
+      qc.invalidateQueries({ queryKey: ["mensajes"] });
+      qc.invalidateQueries({ queryKey: ["envio-estado"] });
+    } catch (err: any) {
+      toast({ title: "No se envió", description: err?.message, variant: "destructive" });
+      est.refetch();
+    } finally { setEnviando(false); caja.current?.focus(); }
+  }
+
+  let aviso: React.ReactNode = null;
+  if (est.isLoading) aviso = "Revisando si se puede responder…";
+  else if (est.error) aviso = "No se pudo revisar el estado del envío.";
+  else if (!e?.configurado) aviso = "Falta conectar el envío: un administrador debe pegar la clave de YCloud en Admin → Conexión WhatsApp.";
+  else if (!abierta) aviso = "Pasaron más de 24 horas desde el último mensaje del cliente. WhatsApp solo permite escribirle desde el teléfono.";
+  else if (sinCupo) aviso = `Se usaron los ${e.limite} mensajes de este mes. Responde desde el teléfono.`;
+
+  return (
+    <footer className="border-t bg-card px-3 py-2 sm:px-4" data-testid="redactor">
+      {aviso ? (
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 py-1 text-center text-xs text-muted-foreground" data-testid="text-aviso-envio">
+          <span>{aviso}</span>
+          {wa && !est.isLoading && <a href={wa} target={WA_TARGET} className="font-semibold text-primary hover:underline">Abrir en WhatsApp</a>}
+        </div>
+      ) : (
+        <>
+          <div className="flex items-end gap-2">
+            <textarea
+              ref={caja}
+              value={texto}
+              onChange={(ev) => setTexto(ev.target.value)}
+              onKeyDown={(ev) => { if (ev.key === "Enter" && !ev.shiftKey && !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) { ev.preventDefault(); enviar(); } }}
+              rows={1}
+              maxLength={4096}
+              placeholder="Escribe una respuesta…"
+              className="max-h-40 min-h-[42px] flex-1 resize-none rounded-2xl border bg-background px-4 py-2.5 text-[15px] outline-none focus:ring-2 focus:ring-ring"
+              style={{ height: Math.min(160, 42 + Math.max(0, texto.split("\n").length - 1) * 22) }}
+              data-testid="input-respuesta"
+            />
+            <Button size="icon" className="h-[42px] w-[42px] shrink-0 rounded-full" onClick={enviar} disabled={!texto.trim() || enviando} aria-label="Enviar" data-testid="button-enviar">
+              {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : <SendHorizontal className="h-5 w-5" />}
+            </Button>
+          </div>
+          <p className="mt-1 px-1 text-[11px] text-muted-foreground tabular-nums" data-testid="text-cupo">
+            Se envía desde el número de Party Box · puedes responder hasta las {new Date(e!.ventanaHasta!).toLocaleTimeString("es-NI", { hour: "numeric", minute: "2-digit" })} · {e!.usados} de {e!.limite} mensajes este mes
+          </p>
+        </>
+      )}
+    </footer>
   );
 }
 

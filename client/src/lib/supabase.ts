@@ -29,8 +29,19 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
 export const WEBHOOK_URL = `${SUPABASE_URL}/functions/v1/whatsapp-webhook`;
 
 export async function llamarCuentas(body: Record<string, unknown>) {
+  return llamarFuncion("cuentas", body);
+}
+
+export type EstadoEnvio = { configurado: boolean; usados: number; limite: number; ventanaHasta: string | null };
+
+// Envía desde el CRM por YCloud (texto o PDF). La función valida ventana de 24 h y tope mensual.
+export async function llamarEnvio(body: Record<string, unknown>): Promise<EstadoEnvio & { ok?: boolean }> {
+  return llamarFuncion("enviar-whatsapp", body);
+}
+
+async function llamarFuncion(nombre: string, body: Record<string, unknown>) {
   const { data: s } = await supabase.auth.getSession();
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/cuentas`, {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/${nombre}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

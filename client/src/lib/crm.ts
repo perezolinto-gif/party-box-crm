@@ -74,10 +74,16 @@ export function fechaHora(iso: string) {
   return new Date(iso).toLocaleString("es-NI", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 }
 
+const ES_MOVIL = typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+
+// En computadora abre WhatsApp Web siempre en la MISMA pestaña ("whatsapp"); en el celular abre la app.
 export function waLink(telefono: string | null | undefined, texto?: string) {
   if (!telefono) return null;
-  return `https://wa.me/${telefono.replace(/\D/g, "")}${texto ? `?text=${encodeURIComponent(texto)}` : ""}`;
+  const tel = telefono.replace(/\D/g, "");
+  const q = texto ? `text=${encodeURIComponent(texto)}` : "";
+  return ES_MOVIL ? `https://wa.me/${tel}${q ? `?${q}` : ""}` : `https://web.whatsapp.com/send?phone=${tel}${q ? `&${q}` : ""}`;
 }
+export const WA_TARGET = ES_MOVIL ? "_blank" : "whatsapp";
 
 export function textoDocumento(d: Documento, items: Item[], cliente?: { nombre: string } | null) {
   const titulo = d.tipo === "cotizacion" ? "Cotización" : "Pedido";

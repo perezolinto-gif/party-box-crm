@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
+import { supabase, llamarEnvio } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import {
-  useClientes, useProductos, usePerfiles, useInvalidar, crearDocumento, ESTADOS, dinero, fechaHora, waLink, textoDocumento, hoyISO,
+  useClientes, useProductos, usePerfiles, useInvalidar, crearDocumento, ESTADOS, dinero, fechaHora, waLink, WA_TARGET, textoDocumento, hoyISO,
   type Documento, type Item, type Seguimiento, type Cliente, type Mensaje,
 } from "@/lib/crm";
 import { normalizarTelefono } from "@shared/extractor";
@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Save, Send, Copy, ArrowLeft, Repeat, MessageSquare, Phone, StickyNote, Loader2, Search, UserPlus, FileDown, Share2 } from "lucide-react";
+import { Plus, Trash2, Save, Send, Copy, ArrowLeft, Repeat, MessageSquare, Phone, StickyNote, Loader2, Search, UserPlus, FileDown, Share2, MessageCircle } from "lucide-react";
 
 // Borrador compartido entre la Bandeja y el editor (sin almacenamiento del navegador)
 export type Borrador = { cliente_id?: string | null; mensaje_origen_id?: string | null; deteccion_id?: string; fecha_evento?: string | null; hora_evento?: string | null; lugar?: string | null; moneda?: "NIO" | "USD"; notas?: string; items?: Item[]; anticipo?: number; convertido_de?: string | null };
@@ -53,6 +53,7 @@ export default function DocumentoEditor({ id, nuevoTipo }: { id?: string; nuevoT
   });
 
   const [generando, setGenerando] = useState(false);
+  const [enviandoWa, setEnviandoWa] = useState(false);
   const [tipo, setTipo] = useState<"cotizacion" | "pedido">(nuevoTipo ?? "cotizacion");
   const [f, setF] = useState<Partial<Documento>>({ estado: "nuevo", moneda: "NIO", anticipo: 0 });
   const [items, setItems] = useState<Item[]>([{ ...VACIO_ITEM }]);
@@ -153,6 +154,25 @@ export default function DocumentoEditor({ id, nuevoTipo }: { id?: string; nuevoT
       toast({ title: "No se pudo crear el PDF", description: e?.message, variant: "destructive" });
     } finally { setGenerando(false); }
   }
+  // Envía el PDF directo al chat del cliente desde el número de Party Box (YCloud).
+  async function enviarPdfWhatsapp() {
+    if (!doc || !cliente?.telefono) return;
+    setEnviandoWa(true);
+    try {
+      const d = { ...(doc as Documento), ...(f as Documento), total };
+      const archivo = await pdfDocumento(d, items.filter((i) => i.descripcion.trim()), cliente);
+      const buf = new Uint8Array(await archivo.arrayBuffer());
+      let bin = ""; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, Array.from(buf.subarray(i, i + 0x8000)));
+      const titulo = d.tipo === "cotizacion" ? "cotización" : "pedido";
+      const r = await llamarEnvio({ accion: "pdf", telefono: cliente.telefono, pdf_base64: btoa(bin), nombre: archivo.name, texto: `Hola, te compartimos la ${titulo} ${d.numero} de Party Box.` });
+      if (d.tipo === "cotizacion" && d.estado === "nuevo") await supabase.from("documentos").update({ estado: "enviada" }).eq("id", d.id);
+      await supabase.from("seguimientos").insert({ documento_id: d.id, cliente_id: d.cliente_id, tipo: "whatsapp", nota: `PDF enviado por WhatsApp desde el CRM (${archivo.name}).`, usuario_id: perfil?.id });
+      invalidar("documento", "documentos", "cliente", "mensajes");
+      toast({ title: "PDF enviado por WhatsApp", description: `Mensajes usados este mes: ${r.usados} de ${r.limite}.` });
+    } catch (e: any) {
+      toast({ title: "No se envió el PDF", description: `${e?.message ?? "Error"} Puedes usar "Descargar PDF" y adjuntarlo a mano.`, variant: "destructive" });
+    } finally { setEnviandoWa(false); }
+  }
   const titulo = esNuevo ? (tipo === "cotizacion" ? "Nueva cotización" : "Nuevo pedido") : `${tipo === "cotizacion" ? "Cotización" : "Pedido"} ${doc?.numero}`;
 
   return (
@@ -245,12 +265,16 @@ export default function DocumentoEditor({ id, nuevoTipo }: { id?: string; nuevoT
             </Campo>
             {doc && (
               <div className="grid gap-2 pt-1">
-                <Button onClick={enviarPdf} disabled={generando} data-testid="button-pdf">
+                <Button onClick={enviarPdfWhatsapp} disabled={enviandoWa || !cliente?.telefono} data-testid="button-pdf-whatsapp">
+                  {enviandoWa ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <MessageCircle className="h-4 w-4 mr-1" />}
+                  {cliente?.telefono ? "Enviar PDF por WhatsApp" : "Cliente sin teléfono"}
+                </Button>
+                <Button variant="outline" onClick={enviarPdf} disabled={generando} data-testid="button-pdf">
                   {generando ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ? <Share2 className="h-4 w-4 mr-1" /> : <FileDown className="h-4 w-4 mr-1" />}
                   {/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ? "Compartir PDF" : "Descargar PDF"}
                 </Button>
                 <Button variant="outline" asChild disabled={!linkWa} data-testid="button-enviar-wa">
-                  {linkWa ? <a href={linkWa} target="_blank" rel="noopener noreferrer"><Send className="h-4 w-4 mr-1" />Enviar como texto</a> : <span><Send className="h-4 w-4 mr-1" />Cliente sin teléfono</span>}
+                  {linkWa ? <a href={linkWa} target={WA_TARGET}><Send className="h-4 w-4 mr-1" />Enviar como texto</a> : <span><Send className="h-4 w-4 mr-1" />Cliente sin teléfono</span>}
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => { navigator.clipboard?.writeText(textoWa); toast({ title: "Texto copiado" }); }} data-testid="button-copiar"><Copy className="h-4 w-4 mr-1" />Copiar texto</Button>
               </div>

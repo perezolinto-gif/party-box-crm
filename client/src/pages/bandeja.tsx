@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
-import { useDetecciones, useInvalidar, dinero, fechaCorta, fechaHora, waLink, hoyISO, type Deteccion } from "@/lib/crm";
+import { useDetecciones, useInvalidar, dinero, fechaCorta, fechaHora, hoyISO, type Deteccion } from "@/lib/crm";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Encabezado } from "./inicio";
 import { prepararBorrador } from "./documento";
@@ -78,7 +78,7 @@ export default function Bandeja() {
         {(estado === "seguimiento" ? [...(data ?? [])].sort((a, b) => (a.seguir_el ?? "").localeCompare(b.seguir_el ?? "")) : data)?.map((d) => {
           const x = d.datos ?? {};
           const tel = d.clientes?.telefono ?? d.mensajes?.telefono;
-          const wa = waLink(tel);
+          const wa = tel ? `/mensajes/${tel.replace(/\D/g, "")}` : null;
           return (
             <article key={d.id} className="tarjeta" data-testid={`card-deteccion-${d.id}`}>
               <div className="flex flex-wrap items-start justify-between gap-2 px-4 pt-4">
@@ -130,7 +130,7 @@ export default function Bandeja() {
                 </>}
                 {estado === "convertida" && d.documento_id && <Button size="sm" variant="outline" asChild><Link href={`/documento/${d.documento_id}`}>Abrir documento</Link></Button>}
                 {estado === "descartada" && <Button size="sm" variant="outline" onClick={() => restaurar(d.id)}>Volver a revisar</Button>}
-                {wa && <Button size="sm" variant="ghost" asChild className="ml-auto"><a href={wa} target="_blank" rel="noopener noreferrer"><MessageCircle className="h-4 w-4 mr-1" />Responder</a></Button>}
+                {wa && <Button size="sm" variant="ghost" asChild className="ml-auto"><Link href={wa}><MessageCircle className="h-4 w-4 mr-1" />Responder</Link></Button>}
               </div>
             </article>
           );

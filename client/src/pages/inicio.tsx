@@ -40,14 +40,15 @@ export function FilaDoc({ d, detalle }: { d: Documento; detalle?: React.ReactNod
   );
 }
 
-function Panel({ titulo, icono: Icono, color = "rojo", children, vacio, enlace }: { titulo: string; icono: any; color?: string; children: React.ReactNode[] | React.ReactNode; vacio: string; enlace?: { href: string; label: string } }) {
+function Panel({ titulo, icono: Icono, color = "rojo", children, vacio, enlace, cuenta }: { titulo: string; icono: any; color?: string; children: React.ReactNode[] | React.ReactNode; vacio: string; enlace?: { href: string; label: string }; cuenta?: number }) {
   const lista = (Array.isArray(children) ? children.flat() : [children]).filter(Boolean);
   return (
     <section className="tarjeta overflow-hidden">
       <div className="flex items-center justify-between gap-3 px-5 py-3.5 text-white" style={{ background: `hsl(var(--solido-${color}))` }}>
         <h2 className="flex items-center gap-2.5 text-base font-bold">
           <span className="grid h-8 w-8 place-items-center rounded-lg bg-white/20"><Icono className="h-4 w-4" /></span>
-          {titulo}
+          <span className="min-w-0">{titulo}</span>
+          {cuenta !== undefined && <span className="rounded-full bg-white px-2 py-0.5 text-sm font-extrabold tabular-nums leading-none" style={{ color: `hsl(var(--solido-${color}))` }} data-testid={`cuenta-${titulo}`}>{cuenta}</span>}
         </h2>
         {enlace && <Link href={enlace.href} className="rounded-full bg-white/15 px-3 py-1 text-sm font-semibold hover:bg-white/25 flex items-center gap-1 shrink-0">{enlace.label}<ArrowRight className="h-3.5 w-3.5" /></Link>}
       </div>
@@ -125,12 +126,6 @@ export default function Inicio() {
   const cotAbiertas = abiertos.filter((d) => d.tipo === "cotizacion");
   const fechaLarga = new Date().toLocaleDateString("es-NI", { weekday: "long", day: "numeric", month: "long" });
 
-  const cifras = [
-    { label: "Mensajes recibidos hoy", valor: hoyMsg?.recibidos ?? 0, href: "/mensajes", icono: MessageCircle, color: "rojo", cargando: cargandoHoy, detalle: hoyMsg ? `${hoyMsg.recibidos} ${hoyMsg.recibidos === 1 ? "recibido" : "recibidos"} · ${hoyMsg.respondidos} ${hoyMsg.respondidos === 1 ? "respondido" : "respondidos"}` : undefined },
-    { label: "Seguimientos pendientes", valor: totalSeguir, href: chatsSeguir.length && !seguimientos.length ? "/bandeja" : "/cotizaciones", icono: CalendarClock, color: "ocre" },
-    { label: "Eventos en 14 días", valor: eventos.length, href: "/pedidos", icono: PartyPopper, color: "verde" },
-    { label: "Cotizaciones abiertas", valor: cotAbiertas.length, href: "/cotizaciones", icono: FileText, color: "azul" },
-  ];
   const nombre = perfil?.nombre?.split(" ")[0] ?? "";
   const resumen = (det?.length ?? 0) + totalSeguir === 0
     ? "Todo al día. Cuando entre un pedido por WhatsApp aparecerá aquí."
@@ -146,6 +141,16 @@ export default function Inicio() {
             <p className="text-sm font-semibold uppercase tracking-[0.12em] text-muted-foreground">{fechaLarga.charAt(0).toUpperCase() + fechaLarga.slice(1)}</p>
             <h1 className="mt-1 font-display text-[2rem] sm:text-[2.5rem] font-extrabold leading-[1.05] tracking-tight" data-testid="text-titulo">Hola, {nombre}</h1>
             <p className="mt-2 max-w-xl text-[15px] text-muted-foreground">{resumen}</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link href="/mensajes" className="inline-flex items-center gap-2 rounded-full bg-[hsl(var(--solido-rojo))] px-3.5 py-1.5 text-sm font-semibold text-white hover:opacity-90 tabular-nums" data-testid="chip-mensajes-hoy">
+                <MessageCircle className="h-4 w-4" />
+                {cargandoHoy ? "Mensajes de hoy…" : `Hoy: ${hoyMsg?.recibidos ?? 0} ${(hoyMsg?.recibidos ?? 0) === 1 ? "recibido" : "recibidos"} · ${hoyMsg?.respondidos ?? 0} ${(hoyMsg?.respondidos ?? 0) === 1 ? "respondido" : "respondidos"}`}
+              </Link>
+              <Link href="/cotizaciones" className="inline-flex items-center gap-2 rounded-full bg-[hsl(var(--solido-azul))] px-3.5 py-1.5 text-sm font-semibold text-white hover:opacity-90 tabular-nums" data-testid="chip-cotizaciones">
+                <FileText className="h-4 w-4" />
+                {isLoading ? "Cotizaciones…" : `${cotAbiertas.length} ${cotAbiertas.length === 1 ? "cotización abierta" : "cotizaciones abiertas"}`}
+              </Link>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2 shrink-0">
             <Button variant="outline" size="lg" asChild data-testid="button-nueva-cotizacion"><Link href="/nuevo/cotizacion"><Plus className="h-4 w-4 mr-1" />Cotización</Link></Button>
@@ -154,29 +159,18 @@ export default function Inicio() {
         </div>
       </section>
 
-      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
-        {cifras.map((c) => (
-          <Link key={c.label} href={c.href} className="group relative overflow-hidden rounded-2xl p-4 sm:p-5 text-white shadow-[0_6px_18px_-8px_rgba(0,0,0,.35)] transition-transform hover:-translate-y-0.5" style={{ background: `hsl(var(--solido-${c.color}))` }} data-testid={`stat-${c.label}`}>
-            <span className="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-white/10" aria-hidden />
-            <span className="relative grid h-10 w-10 place-items-center rounded-xl bg-white/20"><c.icono className="h-5 w-5" /></span>
-            {(isLoading || (c as any).cargando) ? <Skeleton className="mt-3 h-9 w-12 bg-white/30" /> : <p className="relative mt-3 font-display text-[2rem] font-extrabold leading-none tabular-nums">{c.valor}</p>}
-            <p className="relative mt-1.5 text-sm font-medium leading-snug text-white/95">{c.label}</p>
-            {(c as any).detalle && <p className="relative mt-2 inline-block rounded-lg bg-white/20 px-2.5 py-1 text-xs leading-snug font-semibold tabular-nums" data-testid="text-detalle-mensajes">{(c as any).detalle}</p>}
-          </Link>
-        ))}
-      </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <Panel titulo="Dar seguimiento hoy" icono={CalendarClock} color="ocre" vacio="Nada vencido. Buen trabajo." enlace={{ href: "/cotizaciones", label: "Ver todo" }}>
+        <Panel titulo="Dar seguimiento hoy" icono={CalendarClock} color="ocre" cuenta={totalSeguir} vacio="Nada vencido. Buen trabajo." enlace={{ href: "/cotizaciones", label: "Ver todo" }}>
           {chatsSeguir.slice(0, 8).map((x) => <FilaChatSeguir key={x.id} x={x} hoy={hoy} />)}
           {seguimientos.slice(0, Math.max(0, 8 - chatsSeguir.length)).map((d) => (
             <FilaDoc key={d.id} d={d} detalle={d.proximo_seguimiento! < hoy ? <span className="text-destructive font-medium">vencido {fechaCorta(d.proximo_seguimiento)}</span> : "hoy"} />
           ))}
         </Panel>
-        <Panel titulo="Próximos eventos" icono={PartyPopper} color="verde" vacio="No hay pedidos con evento en los próximos 14 días." enlace={{ href: "/pedidos", label: "Pedidos" }}>
+        <Panel titulo="Próximos eventos" icono={PartyPopper} color="verde" cuenta={eventos.length} vacio="No hay pedidos con evento en los próximos 14 días." enlace={{ href: "/pedidos", label: "Pedidos" }}>
           {eventos.slice(0, 8).map((d) => <FilaDoc key={d.id} d={d} detalle={`${fechaCorta(d.fecha_evento)}${d.hora_evento ? " · " + d.hora_evento : ""}`} />)}
         </Panel>
-        <Panel titulo="Detectado en WhatsApp" icono={Inbox} color="rojo" vacio="Sin mensajes nuevos por revisar." enlace={{ href: "/bandeja", label: "Abrir bandeja" }}>
+        <Panel titulo="Detectado en WhatsApp" icono={Inbox} color="rojo" cuenta={det?.length ?? 0} vacio="Sin mensajes nuevos por revisar." enlace={{ href: "/bandeja", label: "Abrir bandeja" }}>
           {(det ?? []).slice(0, 5).map((x) => (
             <Link key={x.id} href="/bandeja" className="block px-5 py-3.5 hover:bg-muted/60" data-testid={`row-det-${x.id}`}>
               <div className="flex items-center justify-between gap-2">
@@ -187,7 +181,7 @@ export default function Inicio() {
             </Link>
           ))}
         </Panel>
-        <Panel titulo="Cotizaciones sin fecha de seguimiento" icono={FileText} color="ciruela" vacio="Todas tienen seguimiento programado.">
+        <Panel titulo="Cotizaciones sin fecha de seguimiento" icono={FileText} color="ciruela" cuenta={sinSeguimiento.length} vacio="Todas tienen seguimiento programado.">
           {sinSeguimiento.slice(0, 6).map((d) => <FilaDoc key={d.id} d={d} detalle={`creada ${fechaCorta(d.creado_en)}`} />)}
         </Panel>
       </div>

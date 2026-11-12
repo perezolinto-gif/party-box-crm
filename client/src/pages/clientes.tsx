@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { useClientes, useDocumentos, usePerfiles, useInvalidar, fechaCorta, fechaHora, waLink, dinero, type Cliente, type Mensaje, type Seguimiento } from "@/lib/crm";
+import { useClientes, useDocumentos, usePerfiles, useInvalidar, fechaCorta, fechaHora, dinero, type Cliente, type Mensaje, type Seguimiento } from "@/lib/crm";
 import { normalizarTelefono } from "@shared/extractor";
 import { Encabezado, FilaDoc } from "./inicio";
 import { Bitacora, prepararBorrador } from "./documento";
@@ -109,7 +109,7 @@ export function ClienteDetalle({ id }: { id: string }) {
   if (!q.data) return <p className="text-sm text-destructive">Cliente no encontrado.</p>;
   const { cliente, mensajes, seguimientos } = q.data;
   const suyos = (docs ?? []).filter((d) => d.cliente_id === id);
-  const wa = waLink(cliente.telefono);
+  const wa = cliente.telefono ? `/mensajes/${cliente.telefono.replace(/\D/g, "")}` : null;
 
   return (
     <div>
@@ -117,7 +117,7 @@ export function ClienteDetalle({ id }: { id: string }) {
       <Encabezado titulo={cliente.nombre} sub={[cliente.telefono ? `+${cliente.telefono}` : null, cliente.email, cliente.direccion].filter(Boolean).join(" · ") || "Sin datos de contacto"}
         acciones={<>
           <Button variant="outline" onClick={() => setEditar(true)} data-testid="button-editar-cliente">Editar</Button>
-          {wa && <Button variant="outline" asChild><a href={wa} target="_blank" rel="noopener noreferrer"><MessageCircle className="h-4 w-4 mr-1" />WhatsApp</a></Button>}
+          {wa && <Button variant="outline" asChild><Link href={wa}><MessageCircle className="h-4 w-4 mr-1" />Conversación</Link></Button>}
         </>} />
       {cliente.notas && <p className="mb-5 rounded-lg border bg-accent/50 px-4 py-2.5 text-sm">{cliente.notas}</p>}
       <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
