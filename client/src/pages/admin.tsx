@@ -182,11 +182,12 @@ export function WhatsappConfig() {
   const cfg = useQuery({
     queryKey: ["config_whatsapp"],
     queryFn: async () => {
-      const { data } = await supabase.from("config_whatsapp").select("verify_token,numero_mostrado,ultimo_evento").eq("id", 1).single();
+      const { data } = await supabase.from("config_whatsapp").select("verify_token,numero_mostrado,ultimo_evento,dias_archivos").eq("id", 1).single();
       const { data: sec } = await supabase.rpc("whatsapp_secret_configurado");
       const { data: yc } = await supabase.rpc("ycloud_secret_configurado");
       const { count } = await supabase.from("mensajes").select("id", { count: "exact", head: true }).eq("origen", "api");
-      return { ...(data as any), secreto: !!sec, ycloud: !!yc, mensajesApi: count ?? 0 };
+      const { count: archivos } = await supabase.from("mensajes").select("id", { count: "exact", head: true }).not("media_path", "is", null);
+      return { ...(data as any), secreto: !!sec, ycloud: !!yc, mensajesApi: count ?? 0, archivos: archivos ?? 0 };
     },
     refetchInterval: 20000,
   });
@@ -211,6 +212,27 @@ export function WhatsappConfig() {
         <div className="text-sm">
           <p className="font-medium" data-testid="text-estado-conexion">{conectado ? "Recibiendo mensajes" : "Aún sin conexión"}</p>
           <p className="text-muted-foreground">{conectado ? `Último evento: ${fechaHora(cfg.data!.ultimo_evento)} · ${cfg.data!.mensajesApi} mensajes recibidos` : "Cuando llegue el primer mensaje, aquí verás la confirmación."}</p>
+        </div>
+      </section>
+
+      <section className="mb-5 tarjeta p-4 sm:p-5 text-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h2 className="text-base font-bold">Fotos, videos y documentos</h2>
+            <p className="mt-1 text-muted-foreground">Se guardan en el CRM durante el tiempo que elijas y después se borran solos cada madrugada. El texto de los chats no se borra. En el teléfono siguen disponibles en WhatsApp.</p>
+            <p className="mt-2 text-muted-foreground" data-testid="text-archivos-guardados">Archivos guardados ahora: <span className="font-semibold text-foreground">{cfg.data?.archivos ?? "—"}</span></p>
+          </div>
+          <div className="w-full shrink-0 sm:w-44">
+            <Label className="mb-1.5 block">Guardar por</Label>
+            <Select value={String(cfg.data?.dias_archivos ?? 30)} onValueChange={(v) => guardar({ dias_archivos: Number(v) })}>
+              <SelectTrigger data-testid="select-dias-archivos"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="15">15 días</SelectItem>
+                <SelectItem value="30">30 días</SelectItem>
+                <SelectItem value="60">60 días</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </section>
 

@@ -21,6 +21,7 @@ type Msg = {
   media_nombre?: string | null;
   media_mime?: string | null;
   media_bytes?: number | null;
+  media_borrado_en?: string | null;
   clientes?: { id: string; nombre: string } | null;
 };
 
@@ -131,7 +132,7 @@ function useConversacion(telefono: string | null) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("mensajes")
-        .select("id, cliente_id, telefono, nombre_contacto, direccion, texto, enviado_en, media_path, media_tipo, media_nombre, media_mime, media_bytes")
+        .select("id, cliente_id, telefono, nombre_contacto, direccion, texto, enviado_en, media_path, media_tipo, media_nombre, media_mime, media_bytes, media_borrado_en")
         .eq("telefono", telefono!)
         .order("enviado_en", { ascending: false })
         .limit(1000);
@@ -326,7 +327,7 @@ function Contenido({ m, url, onCargar }: { m: Msg; url?: string; onCargar?: () =
     cuerpo = (
       <div className="flex w-[240px] max-w-full items-center gap-2 rounded-lg bg-muted/70 px-3 py-3 text-sm text-muted-foreground">
         <ImageOff className="h-4 w-4 shrink-0" aria-hidden />
-        <span>{m.media_path ? "Cargando…" : `${ETIQUETA[p.clase]} (llegó antes de activar los archivos)`}</span>
+        <span>{m.media_path ? "Cargando…" : m.media_borrado_en ? `${ETIQUETA[p.clase]} vencido: se borró del CRM. Sigue en el WhatsApp del teléfono.` : `${ETIQUETA[p.clase]} (llegó antes de activar los archivos)`}</span>
       </div>
     );
   } else if (p.clase === "foto") {
