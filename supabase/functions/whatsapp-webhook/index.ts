@@ -120,7 +120,7 @@ async function guardar(opts: { waId: string; telefono: string; nombre: string | 
 // Un solo recuadro "por revisar" por cliente: los mensajes siguientes se suman al mismo.
 async function registrarDeteccion(mensajeId: string, cid: string | null, ex: any, texto: string, en: string) {
   const previa = cid
-    ? (await sb.from("detecciones").select("id, tipo_sugerido, confianza, datos").eq("cliente_id", cid).eq("estado", "pendiente").order("creado_en", { ascending: false }).limit(1).maybeSingle()).data
+    ? (await sb.from("detecciones").select("id, tipo_sugerido, confianza, datos").eq("cliente_id", cid).in("estado", ["pendiente", "seguimiento"]).order("creado_en", { ascending: false }).limit(1).maybeSingle()).data
     : null;
   if (!previa) {
     await sb.from("detecciones").insert({ mensaje_id: mensajeId, cliente_id: cid, tipo_sugerido: ex.tipo, confianza: ex.confianza, datos: { ...ex, textos: [{ texto, en }] }, actualizado_en: en });
@@ -141,6 +141,7 @@ async function registrarDeteccion(mensajeId: string, cid: string | null, ex: any
     tipo_sugerido: previa.tipo_sugerido === "pedido" || ex.tipo === "pedido" ? "pedido" : "cotizacion",
     confianza: Math.max(previa.confianza ?? 0, ex.confianza),
     datos, actualizado_en: en,
+    estado: "pendiente", seguir_el: null, // el cliente volvió a escribir: regresa a "Por revisar"
   }).eq("id", previa.id);
 }
 

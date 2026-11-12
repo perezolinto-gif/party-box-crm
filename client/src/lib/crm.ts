@@ -16,7 +16,7 @@ export type Documento = {
 export type Seguimiento = { id: string; documento_id: string | null; cliente_id: string | null; tipo: string; nota: string; usuario_id: string | null; creado_en: string };
 export type Deteccion = {
   id: string; mensaje_id: string; cliente_id: string | null; tipo_sugerido: "cotizacion" | "pedido"; confianza: number;
-  datos: any; estado: string; documento_id: string | null; creado_en: string;
+  datos: any; estado: string; documento_id: string | null; creado_en: string; actualizado_en: string; seguir_el: string | null;
   mensajes?: Mensaje | null; clientes?: Pick<Cliente, "id" | "nombre" | "telefono"> | null;
 };
 
