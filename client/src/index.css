@@ -49,6 +49,12 @@
   --marca-azul: 211 40% 52%;
   --marca-verde: 86 45% 39%;
   --marca-vino: 350 69% 39%;
+  /* Tonos sólidos para fondos con letra blanca (contraste AA) */
+  --solido-rojo: 357 88% 42%;
+  --solido-ciruela: 324 42% 38%;
+  --solido-ocre: 36 88% 34%;
+  --solido-azul: 211 46% 38%;
+  --solido-verde: 86 52% 27%;
   --font-sans: "Satoshi", "Segoe UI", sans-serif;
   --font-display: "Cabinet Grotesk", "Satoshi", sans-serif;
   --font-serif: Georgia, serif;

@@ -24,7 +24,7 @@ export function EstadoPill({ d }: { d: Pick<Documento, "tipo" | "estado"> }) {
 export function FilaDoc({ d, detalle }: { d: Documento; detalle?: React.ReactNode }) {
   return (
     <Link href={`/documento/${d.id}`} className="flex items-center gap-3 px-5 py-3.5 hover:bg-muted/60 transition-colors" data-testid={`row-doc-${d.id}`}>
-      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${d.tipo === "pedido" ? "bg-[hsl(var(--marca-verde)/.12)] text-[hsl(var(--marca-verde))]" : "bg-[hsl(var(--marca-azul)/.12)] text-[hsl(var(--marca-azul))]"}`} aria-hidden>
+      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${d.tipo === "pedido" ? "bg-[hsl(var(--solido-verde))] text-white" : "bg-[hsl(var(--solido-azul))] text-white"}`} aria-hidden>
         {d.tipo === "pedido" ? <ShoppingBag className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
       </span>
       <div className="min-w-0 flex-1">
@@ -39,19 +39,19 @@ export function FilaDoc({ d, detalle }: { d: Documento; detalle?: React.ReactNod
   );
 }
 
-function Panel({ titulo, icono: Icono, color = "marca-rojo", children, vacio, enlace }: { titulo: string; icono: any; color?: string; children: React.ReactNode[] | React.ReactNode; vacio: string; enlace?: { href: string; label: string } }) {
+function Panel({ titulo, icono: Icono, color = "rojo", children, vacio, enlace }: { titulo: string; icono: any; color?: string; children: React.ReactNode[] | React.ReactNode; vacio: string; enlace?: { href: string; label: string } }) {
   const lista = (Array.isArray(children) ? children : [children]).filter(Boolean);
   return (
     <section className="tarjeta overflow-hidden">
-      <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3">
+      <div className="flex items-center justify-between gap-3 px-5 py-3.5 text-white" style={{ background: `hsl(var(--solido-${color}))` }}>
         <h2 className="flex items-center gap-2.5 text-base font-bold">
-          <span className="grid h-8 w-8 place-items-center rounded-lg" style={{ background: `hsl(var(--${color}) / .12)`, color: `hsl(var(--${color}))` }}><Icono className="h-4 w-4" /></span>
+          <span className="grid h-8 w-8 place-items-center rounded-lg bg-white/20"><Icono className="h-4 w-4" /></span>
           {titulo}
         </h2>
-        {enlace && <Link href={enlace.href} className="text-sm font-semibold text-primary hover:underline flex items-center gap-1 shrink-0">{enlace.label}<ArrowRight className="h-3.5 w-3.5" /></Link>}
+        {enlace && <Link href={enlace.href} className="rounded-full bg-white/15 px-3 py-1 text-sm font-semibold hover:bg-white/25 flex items-center gap-1 shrink-0">{enlace.label}<ArrowRight className="h-3.5 w-3.5" /></Link>}
       </div>
-      {lista.length ? <div className="divide-y border-t">{lista}</div> : (
-        <div className="mx-5 mb-5 rounded-xl border border-dashed px-4 py-7 text-center text-sm text-muted-foreground">{vacio}</div>
+      {lista.length ? <div className="divide-y">{lista}</div> : (
+        <div className="m-5 rounded-xl border border-dashed px-4 py-7 text-center text-sm text-muted-foreground" style={{ background: `hsl(var(--marca-${color}) / .05)`, borderColor: `hsl(var(--marca-${color}) / .3)` }}>{vacio}</div>
       )}
     </section>
   );
@@ -73,10 +73,10 @@ export default function Inicio() {
   const fechaLarga = new Date().toLocaleDateString("es-NI", { weekday: "long", day: "numeric", month: "long" });
 
   const cifras = [
-    { label: "Por revisar en WhatsApp", valor: det?.length ?? 0, href: "/bandeja", icono: MessageCircle, color: "marca-rojo" },
-    { label: "Seguimientos pendientes", valor: seguimientos.length, href: "/cotizaciones", icono: CalendarClock, color: "marca-ocre" },
-    { label: "Eventos en 14 días", valor: eventos.length, href: "/pedidos", icono: PartyPopper, color: "marca-verde" },
-    { label: "Cotizaciones abiertas", valor: cotAbiertas.length, href: "/cotizaciones", icono: FileText, color: "marca-azul" },
+    { label: "Por revisar en WhatsApp", valor: det?.length ?? 0, href: "/bandeja", icono: MessageCircle, color: "rojo" },
+    { label: "Seguimientos pendientes", valor: seguimientos.length, href: "/cotizaciones", icono: CalendarClock, color: "ocre" },
+    { label: "Eventos en 14 días", valor: eventos.length, href: "/pedidos", icono: PartyPopper, color: "verde" },
+    { label: "Cotizaciones abiertas", valor: cotAbiertas.length, href: "/cotizaciones", icono: FileText, color: "azul" },
   ];
   const nombre = perfil?.nombre?.split(" ")[0] ?? "";
   const resumen = (det?.length ?? 0) + seguimientos.length === 0
@@ -102,24 +102,25 @@ export default function Inicio() {
 
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         {cifras.map((c) => (
-          <Link key={c.label} href={c.href} className="tarjeta group p-4 sm:p-5 transition-transform hover:-translate-y-0.5" data-testid={`stat-${c.label}`}>
-            <span className="grid h-10 w-10 place-items-center rounded-xl" style={{ background: `hsl(var(--${c.color}) / .12)`, color: `hsl(var(--${c.color}))` }}><c.icono className="h-5 w-5" /></span>
-            {isLoading ? <Skeleton className="mt-3 h-9 w-12" /> : <p className="mt-3 font-display text-[2rem] font-extrabold leading-none tabular-nums">{c.valor}</p>}
-            <p className="mt-1.5 text-sm text-muted-foreground leading-snug">{c.label}</p>
+          <Link key={c.label} href={c.href} className="group relative overflow-hidden rounded-2xl p-4 sm:p-5 text-white shadow-[0_6px_18px_-8px_rgba(0,0,0,.35)] transition-transform hover:-translate-y-0.5" style={{ background: `hsl(var(--solido-${c.color}))` }} data-testid={`stat-${c.label}`}>
+            <span className="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-white/10" aria-hidden />
+            <span className="relative grid h-10 w-10 place-items-center rounded-xl bg-white/20"><c.icono className="h-5 w-5" /></span>
+            {isLoading ? <Skeleton className="mt-3 h-9 w-12 bg-white/30" /> : <p className="relative mt-3 font-display text-[2rem] font-extrabold leading-none tabular-nums">{c.valor}</p>}
+            <p className="relative mt-1.5 text-sm font-medium leading-snug text-white/95">{c.label}</p>
           </Link>
         ))}
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <Panel titulo="Dar seguimiento hoy" icono={CalendarClock} color="marca-ocre" vacio="Nada vencido. Buen trabajo." enlace={{ href: "/cotizaciones", label: "Ver todo" }}>
+        <Panel titulo="Dar seguimiento hoy" icono={CalendarClock} color="ocre" vacio="Nada vencido. Buen trabajo." enlace={{ href: "/cotizaciones", label: "Ver todo" }}>
           {seguimientos.slice(0, 8).map((d) => (
             <FilaDoc key={d.id} d={d} detalle={d.proximo_seguimiento! < hoy ? <span className="text-destructive font-medium">vencido {fechaCorta(d.proximo_seguimiento)}</span> : "hoy"} />
           ))}
         </Panel>
-        <Panel titulo="Próximos eventos" icono={PartyPopper} color="marca-verde" vacio="No hay pedidos con evento en los próximos 14 días." enlace={{ href: "/pedidos", label: "Pedidos" }}>
+        <Panel titulo="Próximos eventos" icono={PartyPopper} color="verde" vacio="No hay pedidos con evento en los próximos 14 días." enlace={{ href: "/pedidos", label: "Pedidos" }}>
           {eventos.slice(0, 8).map((d) => <FilaDoc key={d.id} d={d} detalle={`${fechaCorta(d.fecha_evento)}${d.hora_evento ? " · " + d.hora_evento : ""}`} />)}
         </Panel>
-        <Panel titulo="Detectado en WhatsApp" icono={Inbox} color="marca-rojo" vacio="Sin mensajes nuevos por revisar." enlace={{ href: "/bandeja", label: "Abrir bandeja" }}>
+        <Panel titulo="Detectado en WhatsApp" icono={Inbox} color="rojo" vacio="Sin mensajes nuevos por revisar." enlace={{ href: "/bandeja", label: "Abrir bandeja" }}>
           {(det ?? []).slice(0, 5).map((x) => (
             <Link key={x.id} href="/bandeja" className="block px-5 py-3.5 hover:bg-muted/60" data-testid={`row-det-${x.id}`}>
               <div className="flex items-center justify-between gap-2">
@@ -130,7 +131,7 @@ export default function Inicio() {
             </Link>
           ))}
         </Panel>
-        <Panel titulo="Cotizaciones sin fecha de seguimiento" icono={FileText} color="marca-azul" vacio="Todas tienen seguimiento programado.">
+        <Panel titulo="Cotizaciones sin fecha de seguimiento" icono={FileText} color="ciruela" vacio="Todas tienen seguimiento programado.">
           {sinSeguimiento.slice(0, 6).map((d) => <FilaDoc key={d.id} d={d} detalle={`creada ${fechaCorta(d.creado_en)}`} />)}
         </Panel>
       </div>

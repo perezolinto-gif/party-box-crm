@@ -53,7 +53,7 @@ export default function Login() {
           <p className="mt-4 text-base text-muted-foreground">Pedidos, cotizaciones y seguimientos de Party Box en un solo lugar.</p>
           <div className="mt-8 flex flex-wrap gap-2">
             {["Bandeja de WhatsApp", "Cotizaciones", "Pedidos", "Seguimiento"].map((t, i) => (
-              <span key={t} className="rounded-full border px-3 py-1 text-sm font-medium" style={{ borderColor: `hsl(var(--${COLORES[i]}) / .35)`, color: `hsl(var(--${COLORES[i]}))`, background: `hsl(var(--${COLORES[i]}) / .07)` }}>{t}</span>
+              <span key={t} className="rounded-full px-3 py-1 text-sm font-semibold text-white" style={{ background: `hsl(var(--${COLORES[i].replace("marca", "solido")}))` }}>{t}</span>
             ))}
           </div>
         </div>

@@ -79,7 +79,7 @@ export default function Bandeja() {
                   ) : <p className="text-sm font-semibold">{d.mensajes?.nombre_contacto ?? tel}</p>}
                   <p className="text-xs text-muted-foreground">{tel ? `+${tel}` : ""} · {d.mensajes ? fechaHora(d.mensajes.enviado_en) : ""}</p>
                 </div>
-                <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${d.tipo_sugerido === "pedido" ? "bg-[hsl(86_45%_92%)] text-[hsl(86_55%_24%)]" : "bg-[hsl(211_45%_93%)] text-[hsl(211_50%_32%)]"}`}>
+                <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${d.tipo_sugerido === "pedido" ? "bg-[hsl(var(--solido-verde))] text-white" : "bg-[hsl(var(--solido-azul))] text-white"}`}>
                   {d.tipo_sugerido === "pedido" ? "Posible pedido" : "Posible cotización"} · {d.confianza}%
                 </span>
               </div>
