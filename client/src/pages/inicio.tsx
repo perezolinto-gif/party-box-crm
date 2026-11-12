@@ -73,7 +73,7 @@ export default function Inicio() {
   const fechaLarga = new Date().toLocaleDateString("es-NI", { weekday: "long", day: "numeric", month: "long" });
 
   const cifras = [
-    { label: "Por revisar en WhatsApp", valor: det?.length ?? 0, href: "/bandeja", icono: MessageCircle, color: "rojo" },
+    { label: "Mensajes recibidos", valor: det?.length ?? 0, href: "/bandeja", icono: MessageCircle, color: "rojo" },
     { label: "Seguimientos pendientes", valor: seguimientos.length, href: "/cotizaciones", icono: CalendarClock, color: "ocre" },
     { label: "Eventos en 14 días", valor: eventos.length, href: "/pedidos", icono: PartyPopper, color: "verde" },
     { label: "Cotizaciones abiertas", valor: cotAbiertas.length, href: "/cotizaciones", icono: FileText, color: "azul" },
