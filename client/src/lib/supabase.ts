@@ -39,6 +39,21 @@ export async function llamarEnvio(body: Record<string, unknown>): Promise<Estado
   return llamarFuncion("enviar-whatsapp", body);
 }
 
+export type EstadoIA = { configurado: boolean; gastado: number; limite: number; usos: number };
+export type Monto = { valor: number; moneda: "NIO" | "USD"; msg: string | null };
+export type AnalisisIA = {
+  estado: string; resumen: string; siguiente_paso: string;
+  items: { descripcion: string; cantidad: number; precio_unitario: number | null; moneda: "NIO" | "USD" | null; producto_id: string | null; msg: string | null }[];
+  total: Monto | null; envio: Monto | null; fecha_evento: string | null; hora_evento: string | null; lugar: string | null; invitados: number | null;
+  facturar: { nombre: string | null; ruc: string } | null; pago: { detalle: string; msg: string | null } | null;
+  pendientes: { texto: string; msg: string | null }[]; fotos: { msg: string; descripcion: string }[];
+};
+
+// Análisis con ChatGPT (GPT-6 Luna). La función valida miembros y tope mensual en dólares.
+export async function llamarIA(body: Record<string, unknown>): Promise<EstadoIA & { ok?: boolean; analisis?: AnalisisIA; transcripciones?: Record<string, string>; costo?: number }> {
+  return llamarFuncion("analizar-chat", body);
+}
+
 async function llamarFuncion(nombre: string, body: Record<string, unknown>) {
   const { data: s } = await supabase.auth.getSession();
   const res = await fetch(`${SUPABASE_URL}/functions/v1/${nombre}`, {

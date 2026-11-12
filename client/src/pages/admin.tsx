@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase, llamarCuentas, llamarEnvio, WEBHOOK_URL } from "@/lib/supabase";
+import { supabase, llamarCuentas, llamarEnvio, llamarIA, WEBHOOK_URL } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { useProductos, usePerfiles, useInvalidar, dinero, fechaHora, type Producto } from "@/lib/crm";
 import { Encabezado } from "./inicio";
@@ -335,6 +335,10 @@ export function WhatsappConfig() {
   const envio = useQuery({ queryKey: ["envio-estado", "admin"], queryFn: () => llamarEnvio({ accion: "estado" }), refetchInterval: 60000 });
   const [limite, setLimite] = useState("");
   useEffect(() => { if (envio.data) setLimite(String(envio.data.limite)); }, [envio.data?.limite]);
+  const ia = useQuery({ queryKey: ["ia-estado"], queryFn: () => llamarIA({ accion: "estado" }), refetchInterval: 60000 });
+  const [iaKey, setIaKey] = useState("");
+  const [iaLimite, setIaLimite] = useState("");
+  useEffect(() => { if (ia.data) setIaLimite(String(ia.data.limite)); }, [ia.data?.limite]);
   const [numero, setNumero] = useState("");
   useEffect(() => { if (cfg.data?.numero_mostrado) setNumero(cfg.data.numero_mostrado); }, [cfg.data?.numero_mostrado]);
 
@@ -342,7 +346,7 @@ export function WhatsappConfig() {
   async function guardar(patch: Record<string, unknown>) {
     const { error } = await supabase.from("config_whatsapp").update(patch).eq("id", 1);
     if (error) return toast({ title: "Error", description: error.message, variant: "destructive" });
-    setSecreto(""); setYcSecreto(""); setApiKey(""); cfg.refetch(); envio.refetch(); toast({ title: "Guardado" });
+    setSecreto(""); setYcSecreto(""); setApiKey(""); setIaKey(""); cfg.refetch(); envio.refetch(); ia.refetch(); toast({ title: "Guardado" });
   }
   const conectado = !!cfg.data?.ultimo_evento;
 
@@ -408,6 +412,39 @@ export function WhatsappConfig() {
           </div>
         </div>
         <p className="text-xs text-muted-foreground">Meta da 1.000 mensajes de servicio gratis al mes; el tope de 950 deja margen para no pagar. Al llegar al tope, el CRM deja de enviar y se responde desde el teléfono.</p>
+      </section>
+
+      <section className="mb-5 tarjeta p-4 sm:p-5 text-sm space-y-4" data-testid="section-ia">
+        <div className="flex items-start gap-3">
+          {ia.data?.configurado ? <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" /> : <CircleDashed className="h-5 w-5 text-muted-foreground shrink-0" />}
+          <div>
+            <h2 className="text-base font-bold">Analizar chats con ChatGPT</h2>
+            <p className="mt-1 text-muted-foreground">En «Ver chat y analizar», el botón «Analizar con IA» lee todo el chat, las fotos y las notas de voz, y arma la lista, precios, fecha, datos de factura y preguntas sin responder. Cada nota de voz se transcribe una sola vez.</p>
+            <p className="mt-2" data-testid="text-ia-estado">{ia.data ? (ia.data.configurado ? <>Conectado · <b>US${ia.data.gastado.toFixed(2)}</b> de US${ia.data.limite.toFixed(2)} usados este mes · {ia.data.usos} análisis</> : "Aún sin clave de OpenAI.") : "—"}</p>
+          </div>
+        </div>
+        <ol className="list-decimal space-y-1 pl-5 text-muted-foreground">
+          <li>Entra a <a className="text-primary underline" href="https://platform.openai.com/settings/organization/billing/overview" target="_blank" rel="noreferrer">platform.openai.com › Billing</a> (es distinto a la suscripción de ChatGPT), agrega una tarjeta y carga saldo, por ejemplo US$10.</li>
+          <li>En <a className="text-primary underline" href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">API keys</a>, crea una clave nueva (ejemplo: «CRM Party Box»).</li>
+          <li>Pégala abajo y guarda. No se muestra después de guardarla.</li>
+        </ol>
+        <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Clave de API de OpenAI {ia.data?.configurado && <span className="text-emerald-700">(configurada)</span>}</Label>
+            <div className="flex gap-2">
+              <Input type="password" autoComplete="off" value={iaKey} onChange={(e) => setIaKey(e.target.value)} placeholder={ia.data?.configurado ? "•••••••• (pega una nueva para cambiarla)" : "sk-…"} data-testid="input-openai-key" />
+              <Button onClick={() => guardar({ openai_api_key: iaKey.trim() })} disabled={iaKey.trim().length < 20} data-testid="button-guardar-openai">Guardar</Button>
+            </div>
+          </div>
+          <div className="space-y-1.5 sm:w-44">
+            <Label className="text-xs text-muted-foreground">Tope al mes (US$)</Label>
+            <div className="flex gap-2">
+              <Input type="number" min={0} max={500} step="1" value={iaLimite} onChange={(e) => setIaLimite(e.target.value)} data-testid="input-limite-ia" />
+              <Button variant="outline" onClick={() => guardar({ ia_limite_usd_mes: Math.max(0, Math.min(500, Number(iaLimite) || 0)) })} disabled={iaLimite === "" || Number(iaLimite) === ia.data?.limite} data-testid="button-guardar-limite-ia">OK</Button>
+            </div>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">Costo aproximado: menos de 1 centavo de dólar por chat. Al llegar al tope, el botón deja de funcionar hasta el próximo mes y sigue disponible el análisis normal.</p>
       </section>
 
       <section className="mb-5 tarjeta p-4 sm:p-5 text-sm space-y-4">
