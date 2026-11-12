@@ -16,6 +16,7 @@ function textoDe(m: any): string | null {
   if (m.type === "interactive") return m.interactive?.button_reply?.title ?? m.interactive?.list_reply?.title ?? null;
   if (m.type === "image" || m.type === "video" || m.type === "document") return m[m.type]?.caption ? `[${m.type}] ${m[m.type].caption}` : `[${m.type}]`;
   if (m.type === "audio") return "[audio]";
+  if (m.type === "sticker") return "[sticker]";
   if (m.type === "location") return `[ubicación] ${m.location?.name ?? ""} ${m.location?.address ?? ""} (${m.location?.latitude},${m.location?.longitude})`.trim();
   return null;
 }
@@ -42,10 +43,37 @@ async function clienteId(telefono: string, nombre: string | null): Promise<strin
   return data.id;
 }
 
+// ---------- Fotos ----------
+// YCloud entrega un enlace firmado que se puede abrir sin clave durante unos minutos;
+// por eso la foto se descarga en el momento y se guarda en Storage (privado).
+const EXT: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif" };
+function mediaDe(m: any): { link: string; mime: string } | null {
+  if (!m) return null;
+  const o = m.type === "image" ? m.image : m.type === "sticker" ? m.sticker : null;
+  const link = o?.link ?? m.image_url ?? null;
+  if (!link) return null;
+  return { link, mime: (o?.mime_type ?? "image/jpeg").split(";")[0].trim() };
+}
+async function guardarFoto(media: { link: string; mime: string }, telefono: string, waId: string): Promise<string | null> {
+  try {
+    let r = await fetch(media.link);
+    const clave = Deno.env.get("YCLOUD_API_KEY");
+    if (!r.ok && clave) r = await fetch(media.link, { headers: { "X-API-Key": clave } });
+    if (!r.ok) { console.error("foto no descargada", r.status); return null; }
+    const mime = (r.headers.get("content-type") ?? media.mime).split(";")[0].trim();
+    const ext = EXT[mime] ?? EXT[media.mime];
+    if (!ext) return null;
+    const ruta = `${telefono}/${waId.replace(/[^A-Za-z0-9_-]/g, "").slice(-60) || crypto.randomUUID()}.${ext}`;
+    const { error } = await sb.storage.from("whatsapp-media").upload(ruta, new Uint8Array(await r.arrayBuffer()), { contentType: mime, upsert: true });
+    if (error) { console.error("foto no guardada", error.message); return null; }
+    return ruta;
+  } catch (e) { console.error("foto error", e); return null; }
+}
+
 // Historial: solo se sugieren pedidos/cotizaciones de los últimos 30 días para no llenar la bandeja de casos viejos.
 const DIAS_HISTORIAL = 30;
 
-async function guardar(opts: { waId: string; telefono: string; nombre: string | null; direccion: "entrante" | "saliente"; texto: string; ts: number; historial?: boolean }) {
+async function guardar(opts: { waId: string; telefono: string; nombre: string | null; direccion: "entrante" | "saliente"; texto: string; ts: number; historial?: boolean; media?: { link: string; mime: string } | null }) {
   const tel = normalizarTelefono(opts.telefono);
   if (!tel) return;
   const cid = await clienteId(tel, opts.nombre);
@@ -54,6 +82,10 @@ async function guardar(opts: { waId: string; telefono: string; nombre: string | 
     wa_message_id: opts.waId, origen: "api", enviado_en: new Date(opts.ts * 1000).toISOString(),
   }).select("id").single();
   if (error) return; // duplicado (Meta reintenta)
+  if (opts.media) {
+    const ruta = await guardarFoto(opts.media, tel, opts.waId);
+    if (ruta) await sb.from("mensajes").update({ media_path: ruta, media_tipo: "imagen" }).eq("id", msg.id);
+  }
   if (opts.direccion !== "entrante") return;
   if (opts.historial && Date.now() - opts.ts * 1000 > DIAS_HISTORIAL * 86400000) return;
   const ex = extraer(opts.texto, await productos(), new Date(opts.ts * 1000));
@@ -89,11 +121,11 @@ async function procesarYCloud(ev: any) {
   const sal = ev.whatsappMessage;
   if (ent && (tipo === "whatsapp.inbound_message.received" || historial)) {
     const t = textoDe(ent);
-    if (t && ent.from) await guardar({ waId: ent.wamid || ent.id, telefono: ent.from, nombre: ent.customerProfile?.name ?? null, direccion: "entrante", texto: t, ts: segundos(ent.sendTime), historial });
+    if (t && ent.from) await guardar({ waId: ent.wamid || ent.id, telefono: ent.from, nombre: ent.customerProfile?.name ?? null, direccion: "entrante", texto: t, ts: segundos(ent.sendTime), historial, media: mediaDe(ent) });
   }
   if (sal && (tipo === "whatsapp.smb.message.echoes" || tipo === "whatsapp.smb.message.created" || historial)) {
     const t = textoDe(sal);
-    if (t && sal.to) await guardar({ waId: sal.wamid || sal.id, telefono: sal.to, nombre: null, direccion: "saliente", texto: t, ts: segundos(sal.sendTime || sal.createTime), historial });
+    if (t && sal.to) await guardar({ waId: sal.wamid || sal.id, telefono: sal.to, nombre: null, direccion: "saliente", texto: t, ts: segundos(sal.sendTime || sal.createTime), historial, media: mediaDe(sal) });
   }
 }
 

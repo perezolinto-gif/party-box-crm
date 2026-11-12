@@ -6,7 +6,7 @@ import { waLink } from "@/lib/crm";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Search, MessageCircle, UserRound, ExternalLink, Check } from "lucide-react";
+import { ArrowLeft, Search, MessageCircle, UserRound, ExternalLink, Check, Camera, ImageOff } from "lucide-react";
 
 type Msg = {
   id: string;
@@ -16,6 +16,7 @@ type Msg = {
   direccion: "entrante" | "saliente";
   texto: string;
   enviado_en: string;
+  media_path?: string | null;
   clientes?: { id: string; nombre: string } | null;
 };
 
@@ -49,6 +50,17 @@ function etiquetaDia(iso: string) {
   if (d >= ayer) return "Ayer";
   const t = d.toLocaleDateString("es-NI", { weekday: "long", day: "numeric", month: "long" });
   return t.charAt(0).toUpperCase() + t.slice(1);
+}
+/** Separa el marcador "[image]" que guarda el sistema del pie de foto. */
+function partes(texto: string | null) {
+  const t = texto ?? "";
+  const m = t.match(/^\[(image|sticker)\]\s*/);
+  return m ? { foto: true, texto: t.slice(m[0].length) } : { foto: false, texto: t };
+}
+function Vista({ texto }: { texto: string | null }) {
+  const p = partes(texto);
+  if (!p.foto) return <span className="truncate">{p.texto || "(sin texto)"}</span>;
+  return <><Camera className="h-3.5 w-3.5 shrink-0" aria-hidden /><span className="truncate">{p.texto || "Foto"}</span></>;
 }
 function telBonito(t: string) { return t.startsWith("+") ? t : `+${t}`; }
 
@@ -102,12 +114,19 @@ function useConversacion(telefono: string | null) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("mensajes")
-        .select("id, cliente_id, telefono, nombre_contacto, direccion, texto, enviado_en")
+        .select("id, cliente_id, telefono, nombre_contacto, direccion, texto, enviado_en, media_path")
         .eq("telefono", telefono!)
         .order("enviado_en", { ascending: false })
         .limit(1000);
       if (error) throw error;
-      return ((data ?? []) as Msg[]).reverse();
+      const msgs = ((data ?? []) as Msg[]).reverse();
+      const rutas = msgs.map((m) => m.media_path).filter(Boolean) as string[];
+      const urls: Record<string, string> = {};
+      if (rutas.length) {
+        const { data: firmadas } = await supabase.storage.from("whatsapp-media").createSignedUrls(rutas, 60 * 60);
+        for (const f of firmadas ?? []) if (f.path && f.signedUrl) urls[f.path] = f.signedUrl;
+      }
+      return { msgs, urls };
     },
   });
 }
@@ -186,7 +205,7 @@ export default function Mensajes({ telefono }: { telefono?: string }) {
                     <div className="mt-0.5 flex items-center justify-between gap-2">
                       <p className="flex min-w-0 items-center gap-1 truncate text-sm text-muted-foreground">
                         {c.ultimo.direccion === "saliente" && <Check className="h-3.5 w-3.5 shrink-0 text-[hsl(var(--solido-azul))]" aria-label="Respondido" />}
-                        <span className="truncate">{c.ultimo.texto || "(sin texto)"}</span>
+                        <Vista texto={c.ultimo.texto} />
                       </p>
                       {c.sinResponder > 0 && (
                         <span className="grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-[hsl(var(--solido-rojo))] px-1.5 text-[11px] font-bold text-white tabular-nums" aria-label={`${c.sinResponder} sin responder`}>{c.sinResponder}</span>
@@ -217,10 +236,16 @@ export default function Mensajes({ telefono }: { telefono?: string }) {
 }
 
 function Conversacion({ telefono, chat, onVolver }: { telefono: string; chat: Chat | null; onVolver: () => void }) {
-  const { data: msgs, isLoading } = useConversacion(telefono);
+  const { data, isLoading } = useConversacion(telefono);
+  const msgs = data?.msgs;
+  const urls = data?.urls ?? {};
   const fin = useRef<HTMLDivElement>(null);
   const ultimoId = msgs?.[msgs.length - 1]?.id;
+  const abiertoEn = useRef(0);
+  useEffect(() => { abiertoEn.current = Date.now(); }, [telefono]);
   useEffect(() => { fin.current?.scrollIntoView({ block: "end" }); }, [ultimoId, telefono]);
+  // Las fotos cargan después del texto; mientras se abre el chat se mantiene abajo, como WhatsApp.
+  const alCargarFoto = () => { if (Date.now() - abiertoEn.current < 5000) fin.current?.scrollIntoView({ block: "end" }); };
 
   const nombre = chat?.nombre ?? telBonito(telefono);
   const wa = waLink(telefono);
@@ -259,7 +284,7 @@ function Conversacion({ telefono, chat, onVolver }: { telefono: string; chat: Ch
             {g.items.map((m) => (
               <div key={m.id} className={`flex ${m.direccion === "saliente" ? "justify-end" : "justify-start"}`}>
                 <div className={`max-w-[85%] sm:max-w-[70%] rounded-xl px-3 py-2 text-[15px] shadow-sm ${m.direccion === "saliente" ? "bg-[hsl(130_45%_88%)] rounded-tr-sm" : "bg-white rounded-tl-sm"}`}>
-                  <p className="whitespace-pre-wrap break-words">{m.texto}</p>
+                  <Contenido m={m} url={m.media_path ? urls[m.media_path] : undefined} onCargar={alCargarFoto} />
                   <p className="mt-0.5 text-right text-[11px] text-muted-foreground tabular-nums">{horaCorta(m.enviado_en)}</p>
                 </div>
               </div>
@@ -272,5 +297,25 @@ function Conversacion({ telefono, chat, onVolver }: { telefono: string; chat: Ch
         Se responde desde WhatsApp Business en el teléfono; la respuesta aparece aquí sola en unos segundos.
       </footer>
     </>
+  );
+}
+
+function Contenido({ m, url, onCargar }: { m: Msg; url?: string; onCargar?: () => void }) {
+  const p = partes(m.texto);
+  if (!p.foto) return <p className="whitespace-pre-wrap break-words">{m.texto}</p>;
+  return (
+    <div className="-mx-1 -mt-0.5">
+      {url ? (
+        <a href={url} target="_blank" rel="noreferrer" className="block" data-testid={`foto-${m.id}`}>
+          <img src={url} alt={p.texto || "Foto enviada por WhatsApp"} onLoad={onCargar} className="max-h-80 w-full max-w-[280px] rounded-lg bg-muted object-cover" />
+        </a>
+      ) : (
+        <div className="flex w-[220px] max-w-full items-center gap-2 rounded-lg bg-muted/70 px-3 py-3 text-sm text-muted-foreground">
+          <ImageOff className="h-4 w-4 shrink-0" aria-hidden />
+          <span>{m.media_path ? "Cargando foto…" : "Foto (llegó antes de activar las fotos)"}</span>
+        </div>
+      )}
+      {p.texto && <p className="mt-1.5 px-1 whitespace-pre-wrap break-words">{p.texto}</p>}
+    </div>
   );
 }
