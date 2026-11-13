@@ -39,7 +39,8 @@ export async function llamarEnvio(body: Record<string, unknown>): Promise<Estado
   return llamarFuncion("enviar-whatsapp", body);
 }
 
-export type EstadoIA = { configurado: boolean; gastado: number; limite: number; usos: number };
+export type EstadoIA = { configurado: boolean; gastado: number; limite: number; usos: number; auto?: boolean };
+export type AnalisisGuardado = { telefono: string; analisis: AnalisisIA; desde: string; hasta: string; dias: number; automatico: boolean; creado_en: string };
 export type Monto = { valor: number; moneda: "NIO" | "USD"; msg: string | null };
 export type AnalisisIA = {
   estado: string; resumen: string; siguiente_paso: string;

@@ -444,7 +444,14 @@ export function WhatsappConfig() {
             </div>
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">Costo aproximado: menos de 1 centavo de dólar por chat. Al llegar al tope, el botón deja de funcionar hasta el próximo mes y sigue disponible el análisis normal.</p>
+        <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5">
+          <div>
+            <p className="font-semibold">Analizar solo los chats nuevos de la Bandeja</p>
+            <p className="text-xs text-muted-foreground">Cada 5 minutos revisa «Por revisar» y analiza los chats con mensajes nuevos que llevan 10 minutos sin actividad. El resultado aparece en la tarjeta.</p>
+          </div>
+          <Switch checked={!!ia.data?.auto} disabled={!ia.data} onCheckedChange={(v) => guardar({ ia_auto: v })} data-testid="switch-ia-auto" />
+        </div>
+        <p className="text-xs text-muted-foreground">Costo aproximado: 1 a 2 centavos de dólar por chat la primera vez (casi todo por las notas de voz) y menos al volver a analizarlo. Al llegar al tope, el botón deja de funcionar hasta el próximo mes y sigue disponible el análisis normal.</p>
       </section>
 
       <section className="mb-5 tarjeta p-4 sm:p-5 text-sm space-y-4">

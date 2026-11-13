@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase, llamarIA, type AnalisisIA } from "@/lib/supabase";
+import { supabase, llamarIA, type AnalisisIA, type AnalisisGuardado } from "@/lib/supabase";
+import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useProductos, dinero, fechaCorta } from "@/lib/crm";
 import { analizarChat, type Monto } from "@shared/analisis";
@@ -36,8 +37,14 @@ export function AnalisisChat({ telefono, nombre, abierto, onCerrar, onCrear }: {
 }) {
   const [dias, setDias] = useState(1);
   const { toast } = useToast();
-  const [ia, setIa] = useState<{ a: AnalisisIA; dias: number; costo: number; trans: Record<string, string> } | null>(null);
+  const [ia, setIa] = useState<{ a: AnalisisIA; dias: number; costo: number; trans: Record<string, string>; auto?: boolean; en?: string; viejo?: boolean } | null>(null);
   const [iaCargando, setIaCargando] = useState(false);
+  const qc = useQueryClient();
+  // Si ya hay un análisis guardado (automático o hecho antes), se muestra de una vez.
+  const guardado = useQuery({
+    queryKey: ["analisis_ia", telefono], enabled: abierto,
+    queryFn: async () => (await supabase.from("analisis_ia").select("*").eq("telefono", telefono).maybeSingle()).data as AnalisisGuardado | null,
+  });
   useEffect(() => { setIa(null); }, [telefono]);
   const { data: productos } = useProductos();
   const q = useQuery({
@@ -45,7 +52,7 @@ export function AnalisisChat({ telefono, nombre, abierto, onCerrar, onCrear }: {
     enabled: abierto,
     queryFn: async () => {
       const { data, error } = await supabase.from("mensajes")
-        .select("id, cliente_id, telefono, nombre_contacto, direccion, texto, enviado_en, media_path, media_tipo, media_nombre, media_mime, media_bytes, media_borrado_en")
+        .select("id, cliente_id, telefono, nombre_contacto, direccion, texto, enviado_en, media_path, media_tipo, media_nombre, media_mime, media_bytes, media_borrado_en, ia_transcripcion")
         .eq("telefono", telefono).order("enviado_en", { ascending: false }).limit(400);
       if (error) throw error;
       const msgs = ((data ?? []) as Msg[]).reverse();
@@ -58,6 +65,14 @@ export function AnalisisChat({ telefono, nombre, abierto, onCerrar, onCrear }: {
       return { msgs, urls };
     },
   });
+
+  useEffect(() => {
+    const g = guardado.data, todos = q.data?.msgs;
+    if (!g || !todos?.length || ia) return;
+    const d = [1, 3, 7].includes(g.dias) ? g.dias : 3;
+    setDias(d);
+    setIa({ a: g.analisis, dias: d, costo: 0, trans: {}, auto: g.automatico, en: g.creado_en, viejo: todos[todos.length - 1].enviado_en > g.hasta });
+  }, [guardado.data, q.data]);
 
   const msgs = useMemo(() => {
     const todos = q.data?.msgs ?? [];
@@ -74,8 +89,9 @@ export function AnalisisChat({ telefono, nombre, abierto, onCerrar, onCrear }: {
     if (!q.data?.msgs.length) return;
     setIaCargando(true);
     try {
-      const r = await llamarIA({ accion: "analizar", telefono, desde: desde(q.data.msgs[q.data.msgs.length - 1].enviado_en, dias) });
+      const r = await llamarIA({ accion: "analizar", telefono, dias, desde: desde(q.data.msgs[q.data.msgs.length - 1].enviado_en, dias) });
       if (r.analisis) setIa({ a: r.analisis, dias, costo: r.costo ?? 0, trans: r.transcripciones ?? {} });
+      qc.invalidateQueries({ queryKey: ["analisis_ia"] });
     } catch (e: any) {
       toast({ title: "No se pudo analizar con IA", description: e.message, variant: "destructive" });
     } finally { setIaCargando(false); }
@@ -144,7 +160,7 @@ export function AnalisisChat({ telefono, nombre, abierto, onCerrar, onCrear }: {
                   <div key={m.id} id={`am-${m.id}`} className={`flex ${m.direccion === "saliente" ? "justify-end" : "justify-start"}`}>
                     <div className={`max-w-[85%] rounded-xl px-3 py-2 text-[14px] shadow-sm ${m.direccion === "saliente" ? "bg-[hsl(130_45%_88%)] rounded-tr-sm" : "bg-white rounded-tl-sm"}`}>
                       <Contenido m={m} url={m.media_path ? urls[m.media_path] : undefined} />
-                      {ia?.trans[m.id] && <p className="mt-1 flex gap-1 rounded-md bg-black/5 px-2 py-1 text-[13px] italic" data-testid={`trans-${m.id}`}><Mic className="h-3.5 w-3.5 mt-0.5 shrink-0" />{ia.trans[m.id]}</p>}
+                      {(ia?.trans[m.id] || (m as any).ia_transcripcion) && <p className="mt-1 flex gap-1 rounded-md bg-black/5 px-2 py-1 text-[13px] italic" data-testid={`trans-${m.id}`}><Mic className="h-3.5 w-3.5 mt-0.5 shrink-0" />{ia?.trans[m.id] || (m as any).ia_transcripcion}</p>}
                       {fotoDesc[m.id] && <p className="mt-1 flex gap-1 rounded-md bg-black/5 px-2 py-1 text-[13px]"><Bot className="h-3.5 w-3.5 mt-0.5 shrink-0" />{fotoDesc[m.id]}</p>}
                       <p className="mt-0.5 text-right text-[11px] text-muted-foreground tabular-nums">{horaCorta(m.enviado_en)}</p>
                     </div>
@@ -157,9 +173,9 @@ export function AnalisisChat({ telefono, nombre, abierto, onCerrar, onCrear }: {
           <aside className="min-h-0 overflow-y-auto border-l px-4 py-4 space-y-4 text-sm order-1 lg:order-2 max-lg:border-b max-lg:border-l-0" data-testid="analisis-resumen">
             {ia ? (
               <div className="flex items-center justify-between gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-xs">
-                <span className="flex items-center gap-1.5 font-semibold text-primary"><Bot className="h-4 w-4" />Análisis con IA · {RANGOS.find((r) => r[1] === ia.dias)?.[0]}</span>
+                <span className="flex flex-col font-semibold text-primary"><span className="flex items-center gap-1.5"><Bot className="h-4 w-4" />{ia.auto ? "Análisis automático" : "Análisis con IA"} · {RANGOS.find((r) => r[1] === ia.dias)?.[0]}</span>{ia.viejo && <span className="font-medium text-[hsl(var(--solido-rojo))]">Hay mensajes nuevos</span>}</span>
                 <span className="flex items-center gap-2">
-                  {ia.dias !== dias && <button type="button" onClick={analizarIA} disabled={iaCargando} className="font-semibold text-primary hover:underline">Reanalizar</button>}
+                  {(ia.dias !== dias || ia.viejo) && <button type="button" onClick={analizarIA} disabled={iaCargando} className="font-semibold text-primary hover:underline" data-testid="button-reanalizar">{iaCargando ? "Analizando…" : "Reanalizar"}</button>}
                   <button type="button" onClick={() => setIa(null)} className="flex items-center gap-1 text-muted-foreground hover:text-foreground" data-testid="button-ia-quitar"><RotateCcw className="h-3 w-3" />Normal</button>
                 </span>
               </div>

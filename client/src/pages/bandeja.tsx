@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { supabase } from "@/lib/supabase";
+import { supabase, type AnalisisGuardado } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { useDetecciones, useInvalidar, dinero, fechaCorta, fechaHora, hoyISO, type Deteccion } from "@/lib/crm";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -10,7 +11,7 @@ import { AnalisisChat, type DatosCotizacion } from "@/components/analisis-chat";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, ShoppingBag, X, MessageCircle, CalendarDays, MapPin, Banknote, Users, Upload, CalendarClock, Undo2, Sparkles } from "lucide-react";
+import { FileText, ShoppingBag, X, MessageCircle, CalendarDays, MapPin, Banknote, Users, Upload, CalendarClock, Undo2, Sparkles, Bot, ArrowRight } from "lucide-react";
 
 const PLAZOS: [string, number][] = [["Mañana", 1], ["En 3 días", 3], ["En 1 semana", 7]];
 function enDias(n: number) { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
@@ -22,6 +23,15 @@ export default function Bandeja() {
   const { perfil } = useAuth();
   const [, navegar] = useLocation();
   const [analizar, setAnalizar] = useState<Deteccion | null>(null);
+  const telDe = (d: Deteccion) => (d.clientes?.telefono ?? d.mensajes?.telefono ?? "").replace(/\D/g, "");
+  const tels = Array.from(new Set((data ?? []).map(telDe).filter(Boolean))).sort();
+  const ias = useQuery({
+    queryKey: ["analisis_ia", "bandeja", tels.join(",")], enabled: tels.length > 0, refetchInterval: 60000,
+    queryFn: async () => {
+      const { data: f } = await supabase.from("analisis_ia").select("*").in("telefono", tels);
+      return Object.fromEntries(((f ?? []) as AnalisisGuardado[]).map((x) => [x.telefono, x])) as Record<string, AnalisisGuardado>;
+    },
+  });
 
   function crearDesdeAnalisis(tipo: "cotizacion" | "pedido", a: DatosCotizacion) {
     const d = analizar!;
@@ -92,6 +102,7 @@ export default function Bandeja() {
           const x = d.datos ?? {};
           const tel = d.clientes?.telefono ?? d.mensajes?.telefono;
           const wa = tel ? `/mensajes/${tel.replace(/\D/g, "")}` : null;
+          const g = ias.data?.[telDe(d)]?.analisis;
           return (
             <article key={d.id} className="tarjeta" data-testid={`card-deteccion-${d.id}`}>
               <div className="flex flex-wrap items-start justify-between gap-2 px-4 pt-4">
@@ -107,18 +118,27 @@ export default function Bandeja() {
                     {d.seguir_el < hoyISO() ? `Vencido ${fechaCorta(d.seguir_el)}` : d.seguir_el === hoyISO() ? "Seguir hoy" : `Seguir el ${fechaCorta(d.seguir_el)}`}
                   </span>
                 )}
-                <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${d.tipo_sugerido === "pedido" ? "bg-[hsl(var(--solido-verde))] text-white" : "bg-[hsl(var(--solido-azul))] text-white"}`}>
+                {g && <span className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold text-white ${g.estado === "Pagado" ? "bg-[hsl(var(--solido-verde))]" : g.estado === "Sin interés" ? "bg-muted-foreground" : "bg-[hsl(var(--solido-ciruela))]"}`} data-testid={`text-ia-estado-${d.id}`}><Bot className="h-3.5 w-3.5" />{g.estado}</span>}
+                {!g && <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${d.tipo_sugerido === "pedido" ? "bg-[hsl(var(--solido-verde))] text-white" : "bg-[hsl(var(--solido-azul))] text-white"}`}>
                   {d.tipo_sugerido === "pedido" ? "Posible pedido" : "Posible cotización"} · {d.confianza}%
-                </span>
+                </span>}
                 </div>
               </div>
-              <div className="mx-4 mt-3 space-y-1.5 cursor-pointer" onClick={() => tel && setAnalizar(d)} title="Ver el chat completo" data-testid={`text-mensaje-${d.id}`}>
+              {g && (
+                <div className="mx-4 mt-3 cursor-pointer rounded-lg border border-[hsl(var(--solido-ciruela)/.25)] bg-[hsl(var(--solido-ciruela)/.06)] px-3 py-2.5 text-sm" onClick={() => setAnalizar(d)} data-testid={`ia-resumen-${d.id}`}>
+                  <p>{g.resumen}</p>
+                  {g.items.length > 0 && <p className="mt-1 text-xs"><b>Pide:</b> {g.items.map((i) => `${i.cantidad} × ${i.descripcion}`).join(", ")}{g.total ? ` · Total ${dinero(g.total.valor, g.total.moneda)}` : ""}</p>}
+                  {g.pendientes.length > 0 && <p className="mt-1 text-xs text-[hsl(var(--solido-rojo))]"><b>Sin responder:</b> {g.pendientes.map((p) => p.texto).join(" · ")}</p>}
+                  {g.siguiente_paso && <p className="mt-1 flex gap-1 text-xs font-medium"><ArrowRight className="h-3.5 w-3.5 mt-px shrink-0" />{g.siguiente_paso}</p>}
+                </div>
+              )}
+              <div className={`mx-4 mt-3 space-y-1.5 cursor-pointer ${g ? "hidden" : ""}`} onClick={() => tel && setAnalizar(d)} title="Ver el chat completo" data-testid={`text-mensaje-${d.id}`}>
                 {(x.textos?.length ? x.textos.slice(-5) : [{ texto: d.mensajes?.texto, en: d.mensajes?.enviado_en }]).map((m: any, i: number) => (
                   <p key={i} className="whitespace-pre-wrap break-words rounded-lg bg-muted px-3 py-2 text-sm">{m.texto}{x.textos?.length > 1 && m.en && <span className="ml-2 text-xs text-muted-foreground">{fechaHora(m.en)}</span>}</p>
                 ))}
                 {x.textos?.length > 5 && <p className="text-xs text-muted-foreground">{x.textos.length - 5 === 1 ? "y 1 mensaje anterior" : `y ${x.textos.length - 5} mensajes anteriores`}</p>}
               </div>
-              <div className="flex flex-wrap gap-x-4 gap-y-1.5 px-4 pt-3 text-xs text-muted-foreground">
+              <div className={`flex flex-wrap gap-x-4 gap-y-1.5 px-4 pt-3 text-xs text-muted-foreground ${g ? "hidden" : ""}`}>
                 {x.items?.length > 0 && <span className="text-foreground">{x.items.map((i: any) => `${i.cantidad} × ${i.descripcion}`).join(", ")}</span>}
                 {x.fecha_evento && <span className="flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" />{fechaCorta(x.fecha_evento)}{x.hora_evento ? ` · ${x.hora_evento}` : ""}</span>}
                 {x.lugar && <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{x.lugar}</span>}
