@@ -100,21 +100,36 @@ const DIAS_HISTORIAL = 30;
 
 async function guardar(opts: { waId: string; telefono: string; nombre: string | null; direccion: "entrante" | "saliente"; texto: string; ts: number; historial?: boolean; media?: Media | null }) {
   const tel = normalizarTelefono(opts.telefono);
-  if (!tel) return;
+  if (!tel) return false;
   const cid = await clienteId(tel, opts.nombre);
   const { data: msg, error } = await sb.from("mensajes").insert({
     cliente_id: cid, telefono: tel, nombre_contacto: opts.nombre, direccion: opts.direccion, texto: opts.texto,
     wa_message_id: opts.waId, origen: "api", enviado_en: new Date(opts.ts * 1000).toISOString(),
   }).select("id").single();
-  if (error) return; // duplicado (Meta reintenta)
+  if (error) return false; // duplicado (Meta reintenta)
   if (opts.media) {
     const g = await guardarMedia(opts.media, tel, opts.waId);
     if (g) await sb.from("mensajes").update({ media_path: g.ruta, media_tipo: opts.media.tipo, media_nombre: opts.media.nombre, media_mime: g.mime, media_bytes: g.bytes }).eq("id", msg.id);
   }
-  if (opts.direccion !== "entrante") return;
-  if (opts.historial && Date.now() - opts.ts * 1000 > DIAS_HISTORIAL * 86400000) return;
+  if (opts.direccion !== "entrante") return true;
+  if (opts.historial && Date.now() - opts.ts * 1000 > DIAS_HISTORIAL * 86400000) return true;
+  if (!opts.historial && esPedidoReporte(opts.texto)) { await pedirReporte(tel); return true; }
   const ex = extraer(opts.texto, await productos(), new Date(opts.ts * 1000));
   if (ex.tipo && ex.confianza >= UMBRAL_DETECCION) await registrarDeteccion(msg.id, cid, ex, opts.texto, new Date(opts.ts * 1000).toISOString());
+  return true;
+}
+
+// "reporte" / "Ver reporte" desde un número del equipo: la función reporte-whatsapp valida la lista.
+function esPedidoReporte(t: string) {
+  return /^(ver\s+)?reporte[.!]?$/.test(t.trim().toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, ""));
+}
+async function pedirReporte(tel: string) {
+  try {
+    const { data: c } = await sb.from("config_whatsapp").select("limpieza_token").eq("id", 1).single();
+    if (!c?.limpieza_token) return;
+    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/reporte-whatsapp`, { method: "POST", headers: { "Content-Type": "application/json", "x-limpieza": c.limpieza_token }, body: JSON.stringify({ accion: "pedido", telefono: tel }) });
+    console.log("reporte", tel.slice(-4), r.status, (await r.text()).slice(0, 200));
+  } catch (e) { console.error("reporte", e); }
 }
 
 // Un solo recuadro "por revisar" por cliente: los mensajes siguientes se suman al mismo.

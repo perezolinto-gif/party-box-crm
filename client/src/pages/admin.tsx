@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase, llamarCuentas, llamarEnvio, llamarIA, WEBHOOK_URL } from "@/lib/supabase";
+import { supabase, llamarCuentas, llamarEnvio, llamarIA, llamarReporte, WEBHOOK_URL } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { useProductos, usePerfiles, useInvalidar, dinero, fechaHora, type Producto } from "@/lib/crm";
 import { Encabezado } from "./inicio";
@@ -454,6 +454,8 @@ export function WhatsappConfig() {
         <p className="text-xs text-muted-foreground">Costo aproximado: 1 a 2 centavos de dólar por chat la primera vez (casi todo por las notas de voz) y menos al volver a analizarlo. Al llegar al tope, el botón deja de funcionar hasta el próximo mes y sigue disponible el análisis normal.</p>
       </section>
 
+      <ReporteWhatsApp />
+
       <section className="mb-5 tarjeta p-4 sm:p-5 text-sm space-y-4">
         <div>
           <h2 className="font-semibold">Conectar con YCloud (recomendado)</h2>
@@ -506,6 +508,118 @@ export function WhatsappConfig() {
       </details>
       <p className="text-xs text-muted-foreground">Mientras tanto, el equipo puede usar «Importar chats» para traer conversaciones exportadas desde la app.</p>
     </div>
+  );
+}
+
+type Destino = { nombre: string; telefono: string };
+const ESTADO_PLANTILLA: Record<string, string> = { APPROVED: "Aprobada por Meta", PENDING: "En revisión de Meta (suele tardar minutos u horas)", REJECTED: "Rechazada por Meta", PAUSED: "Pausada por Meta", DISABLED: "Desactivada por Meta" };
+function telLegible(t: string) { const d = t.replace(/\D/g, ""); return d.length === 11 && d.startsWith("505") ? `+505 ${d.slice(3, 7)} ${d.slice(7)}` : `+${d}`; }
+
+function ReporteWhatsApp() {
+  const { toast } = useToast();
+  const cfg = useQuery({
+    queryKey: ["reporte-cfg"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("config_whatsapp").select("reporte_destinos, reporte_hora, reporte_auto, reporte_plantilla_estado, reporte_ultimo").eq("id", 1).single();
+      if (error) throw error;
+      return data as { reporte_destinos: Destino[]; reporte_hora: string; reporte_auto: boolean; reporte_plantilla_estado: string | null; reporte_ultimo: string | null };
+    },
+  });
+  const estado = useQuery({ queryKey: ["reporte-estado"], queryFn: () => llamarReporte({ accion: "estado" }), refetchInterval: 120000 });
+  const [lista, setLista] = useState<Destino[]>([]);
+  const [hora, setHora] = useState("07:30");
+  const [nuevo, setNuevo] = useState<Destino>({ nombre: "", telefono: "" });
+  const [vista, setVista] = useState<string | null>(null);
+  const [ocupado, setOcupado] = useState<string | null>(null);
+  useEffect(() => { if (cfg.data) { setLista(cfg.data.reporte_destinos ?? []); setHora(cfg.data.reporte_hora ?? "07:30"); } }, [cfg.data]);
+
+  async function guardar(patch: Record<string, unknown>, aviso = "Guardado") {
+    const { error } = await supabase.from("config_whatsapp").update(patch).eq("id", 1);
+    if (error) return toast({ title: "Error", description: error.message, variant: "destructive" });
+    cfg.refetch(); toast({ title: aviso });
+  }
+  function normalizar(t: string) { let d = t.replace(/\D/g, ""); if (d.length === 8) d = "505" + d; return d; }
+  function agregar() {
+    const tel = normalizar(nuevo.telefono);
+    if (tel.length < 10) return toast({ title: "Número incompleto", description: "Escribe los 8 dígitos (Nicaragua) o el número con código de país.", variant: "destructive" });
+    if (lista.some((d) => d.telefono === tel)) return toast({ title: "Ese número ya está en la lista" });
+    const l = [...lista, { nombre: nuevo.nombre.trim() || telLegible(tel), telefono: tel }];
+    setNuevo({ nombre: "", telefono: "" }); guardar({ reporte_destinos: l }, "Número agregado");
+  }
+  async function accion(clave: string, body: Record<string, unknown>) {
+    setOcupado(clave);
+    try {
+      const r = await llamarReporte(body);
+      if (r.error) toast({ title: "No se pudo", description: r.error, variant: "destructive" });
+      return r;
+    } catch (e: any) { toast({ title: "No se pudo", description: e?.message ?? String(e), variant: "destructive" }); }
+    finally { setOcupado(null); }
+  }
+  const plantilla = estado.data?.plantilla ?? cfg.data?.reporte_plantilla_estado ?? null;
+
+  return (
+    <section className="mb-5 tarjeta p-4 sm:p-5 text-sm space-y-4" data-testid="section-reporte">
+      <div className="flex items-start gap-3">
+        {plantilla === "APPROVED" ? <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" /> : <CircleDashed className="h-5 w-5 text-muted-foreground shrink-0" />}
+        <div>
+          <h2 className="text-base font-bold">Reporte por WhatsApp</h2>
+          <p className="mt-1 text-muted-foreground">Las personas de esta lista reciben los chats urgentes y pendientes de la Bandeja en su WhatsApp. Pueden pedirlo cuando quieran escribiendo «reporte» al número de Party Box (gratis). Cada mañana reciben un aviso automático con el botón «Ver reporte».</p>
+          <p className="mt-2" data-testid="text-plantilla-estado">Aviso diario: <b>{plantilla ? (ESTADO_PLANTILLA[plantilla] ?? plantilla) : "plantilla sin crear"}</b>{cfg.data?.reporte_ultimo && <> · último envío {cfg.data.reporte_ultimo.split("-").reverse().join("/")}</>}</p>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-xs text-muted-foreground">Reciben el reporte</Label>
+        {lista.length === 0 && <p className="text-muted-foreground">Nadie todavía.</p>}
+        {lista.map((d) => (
+          <div key={d.telefono} className="flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2" data-testid={`row-destino-${d.telefono}`}>
+            <div className="min-w-0 flex-1"><p className="font-medium truncate">{d.nombre}</p><p className="text-xs text-muted-foreground">{telLegible(d.telefono)}</p></div>
+            <Button size="sm" variant="outline" disabled={!!ocupado} onClick={async () => { const r = await accion(d.telefono, { accion: "probar", telefono: d.telefono }); if (r?.ok) toast({ title: "Reporte enviado", description: r.modo === "texto" ? "Se mandó el reporte completo." : "Se mandó el aviso con el botón «Ver reporte»." }); }} data-testid={`button-probar-${d.telefono}`}>
+              {ocupado === d.telefono ? <Loader2 className="h-4 w-4 animate-spin" /> : "Enviar ahora"}
+            </Button>
+            <Button size="icon" variant="ghost" aria-label="Quitar" onClick={() => guardar({ reporte_destinos: lista.filter((x) => x.telefono !== d.telefono) }, "Número quitado")} data-testid={`button-quitar-${d.telefono}`}><Trash2 className="h-4 w-4" /></Button>
+          </div>
+        ))}
+        <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+          <Input placeholder="Nombre (ej.: Esposa)" value={nuevo.nombre} onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })} data-testid="input-destino-nombre" />
+          <Input placeholder="WhatsApp (ej.: 8888 8888)" inputMode="tel" value={nuevo.telefono} onChange={(e) => setNuevo({ ...nuevo, telefono: e.target.value })} data-testid="input-destino-telefono" />
+          <Button onClick={agregar} disabled={!nuevo.telefono.trim()} data-testid="button-agregar-destino"><Plus className="h-4 w-4 mr-1" />Agregar</Button>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Hora del aviso diario</Label>
+          <div className="flex gap-2">
+            <Input type="time" className="w-32" value={hora} onChange={(e) => setHora(e.target.value)} data-testid="input-reporte-hora" />
+            <Button variant="outline" disabled={!hora || hora === cfg.data?.reporte_hora} onClick={() => guardar({ reporte_hora: hora })} data-testid="button-guardar-hora">OK</Button>
+          </div>
+        </div>
+        <div className="flex flex-1 items-center justify-between gap-3 rounded-lg border px-3 py-2.5 min-w-[14rem]">
+          <p className="font-semibold">Mandar el aviso cada mañana</p>
+          <Switch checked={!!cfg.data?.reporte_auto} disabled={!cfg.data} onCheckedChange={(v) => guardar({ reporte_auto: v })} data-testid="switch-reporte-auto" />
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" disabled={!!ocupado} onClick={async () => { const r = await accion("vista", { accion: "vista" }); if (r?.texto) setVista(r.texto); }} data-testid="button-vista-reporte">
+          {ocupado === "vista" ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <FileText className="h-4 w-4 mr-1" />}Ver cómo queda
+        </Button>
+        {plantilla !== "APPROVED" && plantilla !== "PENDING" && (
+          <Button variant="outline" disabled={!!ocupado} onClick={async () => { const r = await accion("plantilla", { accion: "crear_plantilla" }); if (r?.ok) { estado.refetch(); cfg.refetch(); toast({ title: "Plantilla enviada a Meta" }); } }} data-testid="button-crear-plantilla">
+            {ocupado === "plantilla" && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}Enviar plantilla a Meta
+          </Button>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">Si la persona escribió a Party Box en las últimas 24 horas, recibe el reporte completo sin costo. Si no, recibe el aviso de la mañana (plantilla de Meta, cerca de US$0.01 por mensaje) y al tocar «Ver reporte» le llega el detalle gratis.</p>
+
+      <Dialog open={vista !== null} onOpenChange={(o) => !o && setVista(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Así llega el reporte</DialogTitle><DialogDescription>Con los datos de este momento.</DialogDescription></DialogHeader>
+          <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap rounded-lg bg-muted p-3 text-xs font-sans" data-testid="text-vista-reporte">{vista}</pre>
+        </DialogContent>
+      </Dialog>
+    </section>
   );
 }
 

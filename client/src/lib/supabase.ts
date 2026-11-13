@@ -55,6 +55,10 @@ export async function llamarIA(body: Record<string, unknown>): Promise<EstadoIA 
   return llamarFuncion("analizar-chat", body);
 }
 
+export async function llamarReporte(body: Record<string, unknown>): Promise<{ ok?: boolean; error?: string; texto?: string; plantilla?: string | null; estado?: string; modo?: string }> {
+  return llamarFuncion("reporte-whatsapp", body);
+}
+
 async function llamarFuncion(nombre: string, body: Record<string, unknown>) {
   const { data: s } = await supabase.auth.getSession();
   const res = await fetch(`${SUPABASE_URL}/functions/v1/${nombre}`, {
