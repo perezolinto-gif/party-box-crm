@@ -39,6 +39,10 @@ async function cfg() {
   const { data } = await sb.from("config_whatsapp").select("ycloud_api_key, limpieza_token, envios_limite_mes, reporte_destinos, reporte_hora, reporte_auto, reporte_plantilla_estado, reporte_waba_id, reporte_ultimo").eq("id", 1).single();
   return data as any;
 }
+function inicioDiaManagua(): string {
+  const a = managua();
+  return new Date(Date.UTC(a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate(), 6, 0, 0)).toISOString();
+}
 function inicioMesManagua(): string {
   const a = managua();
   return new Date(Date.UTC(a.getUTCFullYear(), a.getUTCMonth(), 1, 6, 0, 0)).toISOString();
@@ -201,13 +205,23 @@ Deno.serve(async (req) => {
       const ahora = managua();
       const [h, m] = String(c.reporte_hora ?? "07:30").split(":").map(Number);
       const desde = h * 60 + m, now = ahora.getUTCHours() * 60 + ahora.getUTCMinutes();
-      // Solo en las 3 horas siguientes a la hora elegida, una vez al día.
-      if (now < desde || now > desde + 180 || c.reporte_ultimo === hoyMgua()) return json({ ok: true, motivo: "no es la hora" });
+      // Desde la hora elegida hasta las 8 p. m.; cada persona recibe un solo reporte al día.
+      if (now < desde || now > 20 * 60 || c.reporte_ultimo === hoyMgua()) return json({ ok: true, motivo: "no es la hora" });
       const st = await estadoPlantilla(c);
-      await sb.from("config_whatsapp").update({ reporte_ultimo: hoyMgua() }).eq("id", 1);
+      if (st === "REJECTED" || st === "DISABLED" || st === "PAUSED") console.error("plantilla", st);
+      const { data: ya } = await sb.from("mensajes").select("telefono").eq("origen", "crm").eq("direccion", "saliente").gte("enviado_en", inicioDiaManagua())
+        .in("telefono", destinos.map((d) => d.telefono)).or("texto.ilike.*reporte party box*,texto.ilike.*reporte diario*");
+      const hechos = new Set((ya ?? []).map((x: any) => x.telefono));
       const res: any[] = [];
-      // Ventana de 24 h abierta: reporte completo como texto (sin costo). Si no, la plantilla aprobada.
-      for (const d of destinos) res.push({ tel: d.telefono.slice(-4), ...(await mandarReporte({ ...c, reporte_plantilla_estado: st }, d.telefono)) });
+      let faltan = 0;
+      for (const d of destinos) {
+        if (hechos.has(d.telefono)) continue;
+        // Ventana de 24 h abierta: reporte completo como texto (sin costo). Si no, la plantilla aprobada.
+        const r = await mandarReporte({ ...c, reporte_plantilla_estado: st }, d.telefono);
+        if (!r.ok) faltan++;
+        res.push({ tel: d.telefono.slice(-4), ...r });
+      }
+      if (!faltan) await sb.from("config_whatsapp").update({ reporte_ultimo: hoyMgua() }).eq("id", 1);
       return json({ ok: true, res });
     }
     return json({ error: "Acción desconocida" }, 400);
